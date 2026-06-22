@@ -83,9 +83,51 @@ function makeSparkline(price, change = 0) {
 
 const fallbackFeeds = {
   nifty: { price: 25112.40, change: 0.42, prices: makeSparkline(25112.40, 0.42), decimals: 2, lastPrice: true },
+  banknifty: { price: 56825.20, change: 0.36, prices: makeSparkline(56825.20, 0.36), decimals: 2, lastPrice: true },
   gold: { price: 4191.50, change: 0.18, prices: makeSparkline(4191.50, 0.18), decimals: 2, lastPrice: true },
   bitcoin: { price: 104250.00, change: -0.31, prices: makeSparkline(104250.00, -0.31), decimals: 2 }
 };
+
+const headerMarketFeeds = {
+  nifty: '/api/market-data?market=nifty',
+  banknifty: '/api/market-data?market=banknifty',
+  bitcoin: '/api/market-data?market=bitcoin',
+  gold: '/api/market-data?market=gold'
+};
+
+function formatMarketPrice(quote) {
+  const decimals = Number.isInteger(quote.decimals) ? quote.decimals : 2;
+  return Number(quote.price).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function renderHeaderMarket(name, quote) {
+  document.querySelectorAll(`.header-market-item[data-market="${name}"]`).forEach((item) => {
+    const price = item.querySelector('strong');
+    const change = item.querySelector('em');
+    price.textContent = formatMarketPrice(quote);
+    if (Number.isFinite(quote.change)) {
+      change.textContent = `${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)}%`;
+      change.classList.toggle('negative', quote.change < 0);
+    } else {
+      change.textContent = quote.lastPrice ? 'LAST' : 'LIVE';
+      change.classList.remove('negative');
+    }
+  });
+}
+
+async function updateHeaderMarket(name) {
+  try {
+    const response = await fetch(headerMarketFeeds[name], { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Market ${response.status}`);
+    renderHeaderMarket(name, await response.json());
+  } catch (error) {
+    renderHeaderMarket(name, fallbackFeeds[name]);
+  }
+}
+
+function updateHeaderMarkets() {
+  Object.keys(headerMarketFeeds).forEach(updateHeaderMarket);
+}
 
 function chartPath(values) {
   const clean = values.filter(Number.isFinite);
@@ -142,6 +184,8 @@ async function updateAllMarkets() {
 showMarket(0);
 updateAllMarkets();
 setInterval(updateAllMarkets, 30000);
+updateHeaderMarkets();
+setInterval(updateHeaderMarkets, 45000);
 
 const revealItems = document.querySelectorAll('.section-heading, .course-card, .step, .testimonial-grid blockquote, .faq details, .cta-inner > div');
 if ('IntersectionObserver' in window) {

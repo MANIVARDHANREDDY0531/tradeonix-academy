@@ -1157,3 +1157,254 @@ footer {
     display: none !important;
   }
 }
+
+.trading-graph-bg,
+.hero-visual {
+  display: none !important;
+}
+
+.hero {
+  grid-template-columns: 1fr;
+  min-height: auto;
+  padding-top: 82px;
+  padding-bottom: 72px;
+}
+
+.hero-copy {
+  max-width: 850px;
+}
+
+.hero-copy > p {
+  max-width: 650px;
+}
+
+.hero-proof {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  max-width: 850px;
+  margin-top: 34px;
+}
+
+.hero-proof div {
+  border: 1px solid rgba(247, 200, 91, .22);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(8, 12, 9, .72);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, .22);
+}
+
+.hero-proof small {
+  display: block;
+  color: var(--lux-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+}
+
+.hero-proof b {
+  display: block;
+  margin-top: 8px;
+  color: #fff5df;
+  font: 800 20px/1.1 var(--font-display);
+}
+
+.market-header-ticker {
+  overflow: hidden;
+  border-top: 1px solid rgba(247, 200, 91, .16);
+  border-bottom: 1px solid rgba(247, 200, 91, .16);
+  background: linear-gradient(90deg, rgba(7, 10, 8, .96), rgba(28, 21, 8, .96), rgba(7, 10, 8, .96));
+  color: #fff5df;
+}
+
+.market-header-track {
+  display: flex;
+  width: max-content;
+  gap: 18px;
+  padding: 10px 18px;
+  animation: header-market-scroll 26s linear infinite;
+}
+
+.market-header-ticker:hover .market-header-track {
+  animation-play-state: paused;
+}
+
+.header-market-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: max-content;
+  padding: 8px 13px;
+  border: 1px solid rgba(247, 200, 91, .22);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .045);
+  box-shadow: inset 0 1px 0 rgba(255, 231, 160, .1);
+}
+
+.header-market-item b {
+  color: var(--lux-gold);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: .1em;
+}
+
+.header-market-item strong {
+  color: #fff8e8;
+  font: 900 14px/1 var(--font-display);
+}
+
+.header-market-item em {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(185, 255, 102, .12);
+  color: #b9ff66;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.header-market-item em.negative {
+  background: rgba(255, 110, 92, .13);
+  color: #ff8a78;
+}
+
+@keyframes header-market-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (max-width: 620px) {
+  .hero {
+    padding-top: 54px;
+    padding-bottom: 56px;
+  }
+
+  .hero-proof {
+    grid-template-columns: 1fr;
+  }
+
+  .market-header-track {
+    gap: 10px;
+    padding: 8px 12px;
+    animation-duration: 20s;
+  }
+
+  .header-market-item {
+    gap: 8px;
+    padding: 7px 10px;
+  }
+
+  .header-market-item b {
+    font-size: 10px;
+  }
+
+  .header-market-item strong {
+    font-size: 13px;
+  }
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+body {
+  position: relative;
+}
+
+.nav-wrap,
+.announcement,
+.market-header-ticker,
+.ticker,
+.cta-section,
+footer,
+main,
+section {
+  max-width: 100%;
+}
+
+.container,
+.hero.container {
+  max-width: min(1180px, calc(100% - 32px));
+}
+
+.market-header-ticker,
+.ticker {
+  width: 100%;
+  max-width: 100vw;
+  contain: paint;
+}
+
+.market-header-track,
+.ticker-inner {
+  max-width: none;
+  will-change: transform;
+}
+
+.course-card,
+.market-focus-card,
+.testimonial-grid blockquote,
+.hero-proof div {
+  min-width: 0;
+}
+
+.brand-word,
+.hero h1,
+.hero-copy > p,
+.section-heading h2,
+.course-card h3,
+.market-focus-card h3,
+.footer-grid p,
+.legal span {
+  overflow-wrap: anywhere;
+}
+
+@supports not (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  .nav,
+  .container,
+  .hero.container {
+    width: min(100% - 28px, 1180px) !important;
+    max-width: calc(100% - 28px) !important;
+  }
+
+  .nav-links.open {
+    left: 0;
+    right: 0;
+    width: 100vw;
+    max-width: 100vw;
+  }
+
+  .hero-proof,
+  .course-grid,
+  .market-focus-grid,
+  .testimonial-grid,
+  .footer-grid {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .button,
+  .text-link,
+  .hero-actions {
+    max-width: 100%;
+  }
+}

@@ -48,6 +48,7 @@ const mimeTypes = {
 
 const marketFeeds = {
   nifty: { symbol: '^NSEI', decimals: 2, alwaysOpen: false },
+  banknifty: { symbol: '^NSEBANK', decimals: 2, alwaysOpen: false },
   gold: { symbol: 'XAUUSD=X', decimals: 2, alwaysOpen: false },
   bitcoin: { symbol: 'BTC-USD', decimals: 2, alwaysOpen: true }
 };
