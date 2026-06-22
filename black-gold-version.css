@@ -1408,3 +1408,21 @@ section {
     max-width: 100%;
   }
 }
+
+html,
+body {
+  overscroll-behavior-x: none;
+}
+
+#courses,
+.course-grid,
+.course-card {
+  overflow-anchor: none;
+}
+
+#courses,
+#method,
+#results,
+#faq {
+  scroll-margin-top: 132px;
+}
