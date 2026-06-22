@@ -13,6 +13,7 @@ loadEnv();
 
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+const marketCache = new Map();
 
 const plans = {
   'beginner-3-month': {
@@ -45,6 +46,12 @@ const mimeTypes = {
   '.svg': 'image/svg+xml; charset=utf-8'
 };
 
+const marketFeeds = {
+  nifty: { symbol: '^NSEI', decimals: 2, alwaysOpen: false },
+  gold: { symbol: 'XAUUSD=X', decimals: 2, alwaysOpen: false },
+  bitcoin: { symbol: 'BTC-USD', decimals: 2, alwaysOpen: true }
+};
+
 function sendJson(response, status, payload) {
   response.writeHead(status, {
     'Access-Control-Allow-Headers': 'Content-Type',
@@ -53,6 +60,91 @@ function sendJson(response, status, payload) {
     'Content-Type': 'application/json; charset=utf-8'
   });
   response.end(JSON.stringify(payload));
+}
+
+function getJson(hostname, requestPath) {
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      hostname,
+      path: requestPath,
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 TradeonixAcademy/1.0'
+      }
+    }, (apiResponse) => {
+      let body = '';
+      apiResponse.on('data', (chunk) => {
+        body += chunk;
+      });
+      apiResponse.on('end', () => {
+        if (apiResponse.statusCode < 200 || apiResponse.statusCode >= 300) {
+          reject(new Error(`Market data returned ${apiResponse.statusCode}`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body || '{}'));
+        } catch (error) {
+          reject(new Error('Invalid market data response'));
+        }
+      });
+    });
+    request.setTimeout(7000, () => {
+      request.destroy(new Error('Market data request timed out'));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+async function fetchMarketData(market) {
+  const feed = marketFeeds[market];
+  if (!feed) throw new Error('Unknown market');
+
+  const cached = marketCache.get(market);
+  if (cached && Date.now() - cached.createdAt < 45_000) return cached.payload;
+
+  const symbol = encodeURIComponent(feed.symbol);
+  const yahooPath = `/v8/finance/chart/${symbol}?interval=15m&range=5d`;
+  const data = await getJson('query1.finance.yahoo.com', yahooPath);
+  const result = data.chart?.result?.[0];
+  if (!result) throw new Error('Market chart is unavailable');
+
+  const meta = result.meta || {};
+  const closePrices = result.indicators?.quote?.[0]?.close || [];
+  const prices = closePrices.filter(Number.isFinite);
+  const previous = Number(meta.chartPreviousClose || meta.previousClose || prices.at(0));
+  const price = Number(meta.regularMarketPrice || prices.at(-1) || previous);
+  if (!Number.isFinite(price)) throw new Error('Market price is unavailable');
+
+  const change = Number.isFinite(previous) && previous ? ((price - previous) / previous) * 100 : null;
+  const isClosed = !feed.alwaysOpen && meta.marketState && !['REGULAR', 'PRE', 'POST'].includes(meta.marketState);
+  const payload = {
+    price,
+    change,
+    prices: prices.length > 1 ? prices : makeServerSparkline(price, change),
+    decimals: feed.decimals,
+    lastPrice: Boolean(isClosed),
+    marketState: meta.marketState || 'UNKNOWN'
+  };
+
+  marketCache.set(market, { createdAt: Date.now(), payload });
+  return payload;
+}
+
+function makeServerSparkline(price, change = 0) {
+  const start = price / (1 + (Number(change) || 0) / 100);
+  return Array.from({ length: 24 }, (_, i) => start + (price - start) * (i / 23));
+}
+
+async function handleMarketData(request, response) {
+  try {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const market = clean(url.searchParams.get('market')).toLowerCase();
+    sendJson(response, 200, await fetchMarketData(market));
+  } catch (error) {
+    sendJson(response, 502, { error: 'Could not load market data.' });
+  }
 }
 
 function loadEnv() {
@@ -376,7 +468,10 @@ function serveStatic(request, response) {
       response.end('Not found');
       return;
     }
-    response.writeHead(200, { 'Content-Type': mimeTypes[path.extname(resolvedPath)] || 'application/octet-stream' });
+    response.writeHead(200, {
+      'Cache-Control': 'no-store',
+      'Content-Type': mimeTypes[path.extname(resolvedPath)] || 'application/octet-stream'
+    });
     response.end(content);
   });
 }
@@ -395,6 +490,10 @@ const server = http.createServer((request, response) => {
     sendJson(response, 200, {
       requests: readPurchaseRequests()
     });
+    return;
+  }
+  if (request.method === 'GET' && request.url.startsWith('/api/market-data')) {
+    handleMarketData(request, response);
     return;
   }
   if (request.method === 'POST' && request.url === '/api/create-order') {

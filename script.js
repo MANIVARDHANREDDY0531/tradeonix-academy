@@ -63,33 +63,16 @@ carousel.addEventListener('pointerup', () => {
 
 const feeds = {
   nifty: {
-    url: 'https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=5m&range=1d',
-    parse(data) {
-      const result = data.chart.result[0];
-      const meta = result.meta;
-      const prices = result.indicators.quote[0].close.filter(Number.isFinite);
-      const previous = Number(meta.chartPreviousClose || meta.previousClose);
-      const price = Number(meta.regularMarketPrice || prices.at(-1) || previous);
-      const change = previous ? ((price - previous) / previous) * 100 : null;
-      return { price, change, prices: prices.length > 1 ? prices : makeSparkline(price, change), decimals: 2, lastPrice: !prices.length };
-    }
+    url: '/api/market-data?market=nifty',
+    parse(data) { return data; }
   },
   gold: {
-    url: 'https://api.gold-api.com/price/XAU',
-    parse(data) {
-      const previous = Number(data.prev_close_price || data.previous_close || data.close || data.price);
-      const price = Number(data.price || previous);
-      const change = previous ? ((price - previous) / previous) * 100 : null;
-      return { price, change, prices: makeSparkline(price, Number.isFinite(change) ? change : data.change_percent), decimals: 2, lastPrice: !Number(data.price) };
-    }
+    url: '/api/market-data?market=gold',
+    parse(data) { return data; }
   },
   bitcoin: {
-    url: 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=1',
-    parse(data) {
-      const prices = data.prices.map((point) => point[1]).filter(Number.isFinite);
-      const price = prices.at(-1);
-      return { price, change: ((price - prices[0]) / prices[0]) * 100, prices, decimals: 2 };
-    }
+    url: '/api/market-data?market=bitcoin',
+    parse(data) { return data; }
   }
 };
 
