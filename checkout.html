@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRADEONIX Checkout</title>
+  <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="checkout.css" />
+</head>
+<body>
+  <main class="checkout-shell">
+    <a class="brand" href="black-gold-version.html">
+      <img src="tradeonix-logo.svg" alt="" />
+      <span><strong>TRADEONIX</strong><small>ACADEMY</small></span>
+    </a>
+
+    <section class="checkout-grid">
+      <article class="plan-panel">
+        <div class="eyebrow">Secure enrollment</div>
+        <h1 id="planName">Loading plan...</h1>
+        <p id="planDescription">Preparing your checkout details.</p>
+        <div class="price-box">
+          <span>Amount</span>
+          <strong id="planPrice">Rs. 0</strong>
+        </div>
+        <ul id="planFeatures"></ul>
+        <a class="back-link" href="black-gold-version.html#courses">Back to courses</a>
+      </article>
+
+      <article class="form-panel">
+        <div class="step-label">Step 1 of 2</div>
+        <h2>Enter your details</h2>
+        <form id="checkoutPageForm">
+          <input type="hidden" name="planId" id="planId" />
+          <label><span>Full name</span><input type="text" name="name" autocomplete="name" required /></label>
+          <label><span>Email</span><input type="email" name="email" autocomplete="email" required /></label>
+          <label><span>Phone / WhatsApp</span><input type="tel" name="phone" autocomplete="tel" required /></label>
+          <label><span>Message</span><textarea name="message" rows="3" placeholder="Preferred batch timing or questions"></textarea></label>
+          <button type="submit">Pay with Razorpay <span>→</span></button>
+          <p class="status" id="checkoutPageStatus" role="status"></p>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <section class="success-view" id="successView" aria-hidden="true">
+    <div>
+      <span class="success-mark">✓</span>
+      <h2>Enrollment request received</h2>
+      <p id="successText"></p>
+      <div class="success-actions">
+        <a href="black-gold-version.html">Back to website</a>
+      </div>
+    </div>
+  </section>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script src="checkout.js"></script>
+</body>
+</html>

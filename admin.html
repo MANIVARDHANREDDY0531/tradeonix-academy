@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TRADEONIX Admin - Purchase Requests</title>
+  <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+  <main class="admin-shell">
+    <header class="admin-header">
+      <div>
+        <span class="eyebrow">TRADEONIX ACADEMY</span>
+        <h1>Purchase Requests</h1>
+        <p>View users who submitted a plan purchase request from the website.</p>
+      </div>
+      <div class="admin-actions">
+        <a href="black-gold-version.html">Website</a>
+        <button id="refreshButton" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <section class="summary-grid" aria-label="Request summary">
+      <article>
+        <span>Total requests</span>
+        <strong id="totalRequests">0</strong>
+      </article>
+      <article>
+        <span>Latest request</span>
+        <strong id="latestRequest">None</strong>
+      </article>
+      <article>
+        <span>Total value</span>
+        <strong id="totalValue">Rs. 0</strong>
+      </article>
+    </section>
+
+    <section class="request-card">
+      <div class="table-toolbar">
+        <h2>User Details</h2>
+        <p id="statusText">Loading requests...</p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>User</th>
+              <th>Contact</th>
+              <th>Plan</th>
+              <th>Amount</th>
+              <th>Payment</th>
+              <th>Message</th>
+              <th>Submitted</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="requestRows">
+            <tr><td colspan="9" class="empty">No requests yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <script src="admin.js"></script>
+</body>
+</html>

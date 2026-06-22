@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220" role="img" aria-labelledby="title desc">
+  <title id="title">TRADEONIX logo</title>
+  <desc id="desc">A premium gold trading academy logo with a shield, rising market line, and candlestick symbol.</desc>
+  <defs>
+    <linearGradient id="gold" x1="36" y1="24" x2="176" y2="196" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff2bd"/>
+      <stop offset=".38" stop-color="#f7c85b"/>
+      <stop offset=".72" stop-color="#bd8427"/>
+      <stop offset="1" stop-color="#ffe9a3"/>
+    </linearGradient>
+    <linearGradient id="dark" x1="62" y1="32" x2="158" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#172018"/>
+      <stop offset="1" stop-color="#070a08"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#f7c85b" flood-opacity=".28"/>
+    </filter>
+  </defs>
+  <path fill="url(#dark)" stroke="url(#gold)" stroke-width="8" filter="url(#glow)" d="M110 14 184 45v58c0 48-29 84-74 103-45-19-74-55-74-103V45l74-31Z"/>
+  <path fill="none" stroke="url(#gold)" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" d="M60 137 90 106l24 18 45-55"/>
+  <path fill="none" stroke="#fff2bd" stroke-width="7" stroke-linecap="round" d="M82 68h56"/>
+  <path fill="none" stroke="#f7c85b" stroke-width="8" stroke-linecap="round" d="M110 69v88"/>
+  <rect x="94" y="86" width="32" height="48" rx="8" fill="url(#gold)"/>
+  <path fill="#070a08" opacity=".95" d="M104 95h12v31h-12z"/>
+  <circle cx="160" cy="69" r="8" fill="#fff2bd"/>
+</svg>
