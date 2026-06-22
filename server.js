@@ -449,6 +449,6 @@ const server = http.createServer((request, response) => {
   response.end('Method not allowed');
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`TRADEONIX preview and backend running at http://127.0.0.1:${port}/black-gold-version.html`);
+server.listen(port, '0.0.0.0', () => {
+  console.log(`TRADEONIX preview and backend running on port ${port}`);
 });
