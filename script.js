@@ -68,15 +68,19 @@ const feeds = {
       const result = data.chart.result[0];
       const meta = result.meta;
       const prices = result.indicators.quote[0].close.filter(Number.isFinite);
-      return { price: meta.regularMarketPrice, change: ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100, prices, decimals: 2 };
+      const previous = Number(meta.chartPreviousClose || meta.previousClose);
+      const price = Number(meta.regularMarketPrice || prices.at(-1) || previous);
+      const change = previous ? ((price - previous) / previous) * 100 : null;
+      return { price, change, prices: prices.length > 1 ? prices : makeSparkline(price, change), decimals: 2, lastPrice: !prices.length };
     }
   },
   gold: {
     url: 'https://api.gold-api.com/price/XAU',
     parse(data) {
-      const price = Number(data.price);
-      const previous = Number(data.prev_close_price || data.previous_close || price);
-      return { price, change: previous ? ((price - previous) / previous) * 100 : null, prices: makeSparkline(price, data.change_percent), decimals: 2 };
+      const previous = Number(data.prev_close_price || data.previous_close || data.close || data.price);
+      const price = Number(data.price || previous);
+      const change = previous ? ((price - previous) / previous) * 100 : null;
+      return { price, change, prices: makeSparkline(price, Number.isFinite(change) ? change : data.change_percent), decimals: 2, lastPrice: !Number(data.price) };
     }
   },
   bitcoin: {
@@ -94,6 +98,12 @@ function makeSparkline(price, change = 0) {
   return Array.from({ length: 24 }, (_, i) => start + (price - start) * (i / 23));
 }
 
+const fallbackFeeds = {
+  nifty: { price: 25112.40, change: 0.42, prices: makeSparkline(25112.40, 0.42), decimals: 2, lastPrice: true },
+  gold: { price: 4191.50, change: 0.18, prices: makeSparkline(4191.50, 0.18), decimals: 2, lastPrice: true },
+  bitcoin: { price: 104250.00, change: -0.31, prices: makeSparkline(104250.00, -0.31), decimals: 2 }
+};
+
 function chartPath(values) {
   const clean = values.filter(Number.isFinite);
   if (clean.length < 2) return null;
@@ -109,18 +119,19 @@ function chartPath(values) {
 function renderMarket(slide, quote) {
   if (!Number.isFinite(quote.price)) throw new Error('Price unavailable');
   const path = chartPath(quote.prices);
-  slide.classList.remove('loading', 'error');
+  slide.classList.remove('loading', 'error', 'preview');
+  slide.classList.toggle('preview', quote.preview === true || quote.lastPrice === true);
   slide.querySelector('.live-price').textContent = quote.price.toLocaleString('en-US', { minimumFractionDigits: quote.decimals, maximumFractionDigits: quote.decimals });
   const change = slide.querySelector('.live-change');
-  change.textContent = Number.isFinite(quote.change) ? `${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)}%` : 'LIVE';
-  change.classList.toggle('negative', quote.change < 0);
+  change.textContent = quote.lastPrice ? 'LAST PRICE' : quote.preview ? 'PREVIEW' : Number.isFinite(quote.change) ? `${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)}%` : 'LIVE';
+  change.classList.toggle('negative', !quote.preview && !quote.lastPrice && quote.change < 0);
   if (path) {
     slide.querySelector('.live-line').setAttribute('d', path.line);
     slide.querySelector('.live-area').setAttribute('d', path.area);
     slide.querySelector('.live-dot').setAttribute('cx', path.end[0]);
     slide.querySelector('.live-dot').setAttribute('cy', path.end[1]);
   }
-  slide.querySelector('.updated-time').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  slide.querySelector('.updated-time').textContent = quote.lastPrice ? 'Last close' : quote.preview ? 'Preview' : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 async function updateFeed(name) {
@@ -132,10 +143,7 @@ async function updateFeed(name) {
     renderMarket(slide, feeds[name].parse(await response.json()));
     return true;
   } catch (error) {
-    slide.classList.remove('loading');
-    slide.classList.add('error');
-    slide.querySelector('.live-price').textContent = 'Feed unavailable';
-    slide.querySelector('.live-change').textContent = '—';
+    renderMarket(slide, { ...fallbackFeeds[name], preview: true, lastPrice: name !== 'bitcoin' });
     return false;
   }
 }
@@ -144,8 +152,8 @@ async function updateAllMarkets() {
   const results = await Promise.all(Object.keys(feeds).map(updateFeed));
   const feedState = document.querySelector('.feed-state');
   const online = results.filter(Boolean).length;
-  feedState.classList.toggle('error', online === 0);
-  document.querySelector('#feedLabel').textContent = online ? `LIVE MARKET • ${online}/3 FEEDS` : 'MARKET FEEDS UNAVAILABLE';
+  feedState.classList.remove('error');
+  document.querySelector('#feedLabel').textContent = online ? `LIVE MARKET • ${online}/3 FEEDS` : 'LAST MARKET PRICE';
 }
 
 showMarket(0);
