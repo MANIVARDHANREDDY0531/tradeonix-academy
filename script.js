@@ -34,6 +34,15 @@ document.querySelectorAll('a[href^="#"]').forEach((link) => {
   });
 });
 
+document.querySelectorAll('.enroll-box[href]').forEach((link) => {
+  link.addEventListener('click', (event) => {
+    const targetUrl = link.getAttribute('href');
+    if (!targetUrl || targetUrl.startsWith('#')) return;
+    event.preventDefault();
+    window.location.assign(targetUrl);
+  });
+});
+
 document.querySelectorAll('details').forEach((item) => {
   item.addEventListener('toggle', () => {
     if (!item.open) return;

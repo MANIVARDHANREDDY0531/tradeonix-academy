@@ -1418,6 +1418,9 @@ body {
 .course-grid,
 .course-card {
   overflow-anchor: none;
+  scroll-snap-align: none;
+  scroll-snap-stop: normal;
+  overscroll-behavior: contain;
 }
 
 #courses,
@@ -1425,6 +1428,28 @@ body {
 #results,
 #faq {
   scroll-margin-top: 132px;
+}
+
+@media (max-width: 760px) {
+  #courses {
+    touch-action: pan-y;
+  }
+
+  .courses .course-grid {
+    display: grid;
+    grid-template-columns: 1fr !important;
+    overflow: visible;
+    scroll-snap-type: none;
+  }
+
+  .course-card {
+    min-height: auto;
+    transform: none;
+  }
+
+  .enroll-box {
+    touch-action: manipulation;
+  }
 }
 
 .legal-page {
