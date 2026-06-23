@@ -13,7 +13,17 @@ loadEnv();
 
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
+const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 const marketCache = new Map();
+const siteName = process.env.SITE_NAME || 'TRADEONIX ACADEMY';
+const adminEmail = process.env.ADMIN_EMAIL || '';
+const adminWhatsappNumber = process.env.ADMIN_WHATSAPP_NUMBER || '';
+const notificationFromEmail = process.env.NOTIFICATION_FROM_EMAIL || '';
+const resendApiKey = process.env.RESEND_API_KEY || '';
+const whatsappCloudToken = process.env.WHATSAPP_CLOUD_TOKEN || '';
+const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const adminUsername = process.env.ADMIN_USERNAME || '';
+const adminPassword = process.env.ADMIN_PASSWORD || '';
 
 const plans = {
   'beginner-3-month': {
@@ -55,12 +65,57 @@ const marketFeeds = {
 
 function sendJson(response, status, payload) {
   response.writeHead(status, {
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json; charset=utf-8'
   });
   response.end(JSON.stringify(payload));
+}
+
+function getRequestPath(request) {
+  try {
+    return new URL(request.url, 'http://localhost').pathname;
+  } catch (error) {
+    return request.url.split('?')[0];
+  }
+}
+
+function safeCompare(left, right) {
+  const leftBuffer = Buffer.from(String(left || ''));
+  const rightBuffer = Buffer.from(String(right || ''));
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function isAdminRequest(request) {
+  const requestPath = getRequestPath(request);
+  return requestPath.startsWith('/api/purchase-requests') && request.method !== 'POST';
+}
+
+function isAdminAuthorized(request) {
+  if (!adminUsername || !adminPassword) return false;
+  const authorization = request.headers.authorization || '';
+  if (!authorization.startsWith('Basic ')) return false;
+
+  try {
+    const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    if (separator === -1) return false;
+    const username = decoded.slice(0, separator);
+    const password = decoded.slice(separator + 1);
+    return safeCompare(username, adminUsername) && safeCompare(password, adminPassword);
+  } catch (error) {
+    return false;
+  }
+}
+
+function requestAdminLogin(response) {
+  response.writeHead(401, {
+    'Cache-Control': 'no-store',
+    'Content-Type': 'text/plain; charset=utf-8',
+    'WWW-Authenticate': 'Basic realm="TRADEONIX Admin", charset="UTF-8"'
+  });
+  response.end('Admin login required.');
 }
 
 function getJson(hostname, requestPath) {
@@ -96,6 +151,150 @@ function getJson(hostname, requestPath) {
     request.on('error', reject);
     request.end();
   });
+}
+
+function postJson(hostname, requestPath, headers, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const request = https.request({
+      hostname,
+      path: requestPath,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        ...headers
+      }
+    }, (apiResponse) => {
+      let responseBody = '';
+      apiResponse.on('data', (chunk) => {
+        responseBody += chunk;
+      });
+      apiResponse.on('end', () => {
+        let parsed = {};
+        try {
+          parsed = JSON.parse(responseBody || '{}');
+        } catch (error) {
+          parsed = { raw: responseBody };
+        }
+        if (apiResponse.statusCode < 200 || apiResponse.statusCode >= 300) {
+          reject(new Error(parsed.message || parsed.error?.message || parsed.error || `Notification failed with ${apiResponse.statusCode}`));
+          return;
+        }
+        resolve(parsed);
+      });
+    });
+    request.setTimeout(8000, () => {
+      request.destroy(new Error('Notification request timed out'));
+    });
+    request.on('error', reject);
+    request.write(body);
+    request.end();
+  });
+}
+
+function formatCurrency(amount) {
+  return `Rs. ${Number(amount || 0).toLocaleString('en-IN')}`;
+}
+
+function normalizeWhatsappNumber(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.length === 10) return `91${digits}`;
+  return digits;
+}
+
+async function sendEmail(to, subject, text) {
+  if (!resendApiKey || !notificationFromEmail || !to) return;
+  await postJson('api.resend.com', '/emails', {
+    Authorization: `Bearer ${resendApiKey}`
+  }, {
+    from: notificationFromEmail,
+    to: [to],
+    subject,
+    text
+  });
+}
+
+async function sendWhatsappText(to, text) {
+  const phone = normalizeWhatsappNumber(to);
+  if (!whatsappCloudToken || !whatsappPhoneNumberId || !phone) return;
+  await postJson('graph.facebook.com', `/v20.0/${whatsappPhoneNumberId}/messages`, {
+    Authorization: `Bearer ${whatsappCloudToken}`
+  }, {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: phone,
+    type: 'text',
+    text: {
+      preview_url: false,
+      body: text
+    }
+  });
+}
+
+function runNotification(label, task) {
+  Promise.resolve()
+    .then(task)
+    .catch((error) => {
+      console.warn(`${label} notification failed: ${error.message}`);
+    });
+}
+
+function buildAdminMessage(title, record) {
+  return [
+    `${title}`,
+    `Reference: ${record.referenceId}`,
+    `Name: ${record.customer?.name || '-'}`,
+    `Phone: ${record.customer?.phone || '-'}`,
+    `Email: ${record.customer?.email || '-'}`,
+    `Plan: ${record.planName || record.planId || '-'}`,
+    `Amount: ${formatCurrency(record.planPrice)}`,
+    `Payment status: ${record.paymentStatus || '-'}`,
+    record.razorpayPaymentId ? `Razorpay payment: ${record.razorpayPaymentId}` : '',
+    record.message ? `Message: ${record.message}` : ''
+  ].filter(Boolean).join('\n');
+}
+
+function buildUserRequestMessage(record) {
+  return [
+    `Hi ${record.customer?.name || 'there'},`,
+    `We received your ${siteName} enrollment request.`,
+    `Reference: ${record.referenceId}`,
+    `Plan: ${record.planName}`,
+    `Amount: ${formatCurrency(record.planPrice)}`,
+    `Our team will contact you shortly.`
+  ].join('\n');
+}
+
+function buildUserPaymentMessage(record) {
+  return [
+    `Hi ${record.customer?.name || 'there'},`,
+    `Your payment for ${siteName} was successful.`,
+    `Reference: ${record.referenceId}`,
+    `Plan: ${record.planName}`,
+    `Amount: ${formatCurrency(record.planPrice)}`,
+    `Thank you for enrolling.`
+  ].join('\n');
+}
+
+function notifyNewRequest(record) {
+  runNotification('Admin email new request', () => sendEmail(adminEmail, `New enrollment request - ${record.referenceId}`, buildAdminMessage('New enrollment request', record)));
+  runNotification('Admin WhatsApp new request', () => sendWhatsappText(adminWhatsappNumber, buildAdminMessage('New enrollment request', record)));
+  runNotification('User email request confirmation', () => sendEmail(record.customer?.email, `${siteName} request received`, buildUserRequestMessage(record)));
+  runNotification('User WhatsApp request confirmation', () => sendWhatsappText(record.customer?.phone, buildUserRequestMessage(record)));
+}
+
+function notifyOrderCreated(record) {
+  runNotification('Admin email order created', () => sendEmail(adminEmail, `Razorpay order created - ${record.referenceId}`, buildAdminMessage('Razorpay order created', record)));
+  runNotification('Admin WhatsApp order created', () => sendWhatsappText(adminWhatsappNumber, buildAdminMessage('Razorpay order created', record)));
+}
+
+function notifyPaymentSuccess(record) {
+  runNotification('Admin email payment success', () => sendEmail(adminEmail, `Payment received - ${record.referenceId}`, buildAdminMessage('Payment received', record)));
+  runNotification('Admin WhatsApp payment success', () => sendWhatsappText(adminWhatsappNumber, buildAdminMessage('Payment received', record)));
+  runNotification('User email payment confirmation', () => sendEmail(record.customer?.email, `${siteName} payment successful`, buildUserPaymentMessage(record)));
+  runNotification('User WhatsApp payment confirmation', () => sendWhatsappText(record.customer?.phone, buildUserPaymentMessage(record)));
 }
 
 async function fetchMarketData(market) {
@@ -225,6 +424,10 @@ function findPurchaseRequest(referenceId) {
   return readPurchaseRequests().reverse().find((item) => item.referenceId === referenceId);
 }
 
+function findPurchaseRequestByOrderId(razorpayOrderId) {
+  return readPurchaseRequests().reverse().find((item) => item.razorpayOrderId === razorpayOrderId);
+}
+
 function updatePaymentStatus(referenceId, paymentStatus) {
   const allowedStatuses = new Set(['pending', 'paid', 'failed', 'refunded']);
   if (!allowedStatuses.has(paymentStatus)) return { ok: false, reason: 'invalid' };
@@ -236,6 +439,11 @@ function updatePaymentStatus(referenceId, paymentStatus) {
   request.paymentStatus = paymentStatus;
   request.paymentStatusUpdatedAt = new Date().toISOString();
   writePurchaseRequests(requests);
+  if (paymentStatus === 'paid') {
+    notifyPaymentSuccess(request);
+  } else {
+    runNotification('Admin email payment status update', () => sendEmail(adminEmail, `Payment status updated - ${request.referenceId}`, buildAdminMessage('Payment status updated', request)));
+  }
   return { ok: true, request };
 }
 
@@ -339,6 +547,7 @@ async function handlePurchaseRequest(request, response) {
     };
 
     fs.appendFileSync(requestLog, `${JSON.stringify(record)}\n`, 'utf8');
+    notifyNewRequest(record);
     sendJson(response, 201, {
       ok: true,
       referenceId,
@@ -391,6 +600,7 @@ async function handleCreateOrder(request, response) {
       createdAt: new Date().toISOString()
     };
     fs.appendFileSync(requestLog, `${JSON.stringify(record)}\n`, 'utf8');
+    notifyOrderCreated(record);
 
     sendJson(response, 201, {
       key_id: razorpayKeyId,
@@ -438,6 +648,7 @@ async function handleVerifyPayment(request, response) {
       return;
     }
 
+    const wasAlreadyPaid = savedRequest.paymentStatus === 'paid';
     const updatedRequest = updateRequest(referenceId, (item) => {
       item.status = 'payment_verified';
       item.paymentStatus = 'paid';
@@ -445,10 +656,89 @@ async function handleVerifyPayment(request, response) {
       item.razorpaySignature = razorpaySignature;
       item.paymentStatusUpdatedAt = new Date().toISOString();
     });
+    if (!wasAlreadyPaid) notifyPaymentSuccess(updatedRequest);
 
     sendJson(response, 200, { ok: true, request: updatedRequest });
   } catch (error) {
     sendJson(response, 400, { error: 'Could not verify payment.' });
+  }
+}
+
+async function handleRazorpayWebhook(request, response) {
+  try {
+    if (!razorpayWebhookSecret) {
+      sendJson(response, 500, { error: 'Razorpay webhook secret is not configured.' });
+      return;
+    }
+
+    const rawBody = await readRequestBody(request);
+    const razorpaySignature = clean(request.headers['x-razorpay-signature']);
+    if (!razorpaySignature) {
+      sendJson(response, 400, { error: 'Missing Razorpay webhook signature.' });
+      return;
+    }
+
+    const expectedSignature = crypto
+      .createHmac('sha256', razorpayWebhookSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const expectedBuffer = Buffer.from(expectedSignature);
+    const receivedBuffer = Buffer.from(razorpaySignature);
+    if (expectedBuffer.length !== receivedBuffer.length || !crypto.timingSafeEqual(expectedBuffer, receivedBuffer)) {
+      sendJson(response, 400, { error: 'Invalid Razorpay webhook signature.' });
+      return;
+    }
+
+    const event = JSON.parse(rawBody || '{}');
+    const payment = event.payload?.payment?.entity;
+    const orderId = clean(payment?.order_id);
+    const paymentId = clean(payment?.id);
+    const paymentStatus = clean(payment?.status);
+
+    if (!orderId || !paymentId) {
+      sendJson(response, 200, { ok: true, ignored: true, reason: 'No payment order found.' });
+      return;
+    }
+
+    const savedRequest = findPurchaseRequestByOrderId(orderId);
+    if (!savedRequest) {
+      sendJson(response, 200, { ok: true, ignored: true, reason: 'Order is not linked to a request.' });
+      return;
+    }
+
+    if (event.event === 'payment.captured' || paymentStatus === 'captured') {
+      const wasAlreadyPaid = savedRequest.paymentStatus === 'paid';
+      const updatedRequest = updateRequest(savedRequest.referenceId, (item) => {
+        item.status = 'payment_webhook_verified';
+        item.paymentStatus = 'paid';
+        item.razorpayPaymentId = paymentId;
+        item.razorpayWebhookEvent = event.event || 'payment.captured';
+        item.paymentMethod = clean(payment?.method);
+        item.paymentEmail = clean(payment?.email);
+        item.paymentContact = clean(payment?.contact);
+        item.paymentStatusUpdatedAt = new Date().toISOString();
+      });
+      if (!wasAlreadyPaid) notifyPaymentSuccess(updatedRequest);
+      sendJson(response, 200, { ok: true, referenceId: updatedRequest.referenceId, paymentStatus: 'paid' });
+      return;
+    }
+
+    if (event.event === 'payment.failed' || paymentStatus === 'failed') {
+      const updatedRequest = updateRequest(savedRequest.referenceId, (item) => {
+        item.status = 'payment_webhook_failed';
+        item.paymentStatus = 'failed';
+        item.razorpayPaymentId = paymentId;
+        item.razorpayWebhookEvent = event.event || 'payment.failed';
+        item.paymentStatusUpdatedAt = new Date().toISOString();
+      });
+      sendJson(response, 200, { ok: true, referenceId: updatedRequest.referenceId, paymentStatus: 'failed' });
+      return;
+    }
+
+    sendJson(response, 200, { ok: true, ignored: true, event: event.event || 'unknown' });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not process Razorpay webhook.' });
   }
 }
 
@@ -480,11 +770,15 @@ function serveStatic(request, response) {
 const server = http.createServer((request, response) => {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Origin': '*'
     });
     response.end();
+    return;
+  }
+  if (isAdminRequest(request) && !isAdminAuthorized(request)) {
+    requestAdminLogin(response);
     return;
   }
   if (request.method === 'GET' && request.url === '/api/purchase-requests') {
@@ -503,6 +797,10 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'POST' && request.url === '/api/verify-payment') {
     handleVerifyPayment(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/razorpay-webhook') {
+    handleRazorpayWebhook(request, response);
     return;
   }
   if (request.method === 'POST' && request.url === '/api/purchase-requests') {

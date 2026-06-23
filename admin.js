@@ -4,6 +4,43 @@ const totalRequests = document.querySelector('#totalRequests');
 const latestRequest = document.querySelector('#latestRequest');
 const totalValue = document.querySelector('#totalValue');
 const refreshButton = document.querySelector('#refreshButton');
+const logoutButton = document.querySelector('#logoutButton');
+const adminLoginPanel = document.querySelector('#adminLoginPanel');
+const adminLoginForm = document.querySelector('#adminLoginForm');
+const adminContent = document.querySelector('#adminContent');
+const loginStatus = document.querySelector('#loginStatus');
+const authStorageKey = 'tradeonixAdminAuth';
+
+let adminAuthToken = sessionStorage.getItem(authStorageKey) || '';
+
+function showLogin(message = '') {
+  adminAuthToken = '';
+  sessionStorage.removeItem(authStorageKey);
+  adminLoginPanel.hidden = false;
+  adminContent.hidden = true;
+  loginStatus.textContent = message;
+}
+
+function showAdmin() {
+  adminLoginPanel.hidden = true;
+  adminContent.hidden = false;
+}
+
+function getAdminHeaders(extraHeaders = {}) {
+  return {
+    ...extraHeaders,
+    Authorization: `Basic ${adminAuthToken}`
+  };
+}
+
+async function readJsonResponse(response) {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch (error) {
+    return { error: text || 'Request failed.' };
+  }
+}
 
 function formatAmount(amount) {
   return `Rs. ${Number(amount || 0).toLocaleString('en-IN')}`;
@@ -76,11 +113,24 @@ function renderRequests(requests) {
 }
 
 async function loadRequests() {
+  if (!adminAuthToken) {
+    showLogin('Please log in to continue.');
+    return;
+  }
+
+  showAdmin();
   statusText.textContent = 'Loading requests...';
   refreshButton.disabled = true;
   try {
-    const response = await fetch('/api/purchase-requests', { cache: 'no-store' });
-    const data = await response.json();
+    const response = await fetch('/api/purchase-requests', {
+      cache: 'no-store',
+      headers: getAdminHeaders()
+    });
+    const data = await readJsonResponse(response);
+    if (response.status === 401) {
+      showLogin('Wrong admin ID or password.');
+      return;
+    }
     if (!response.ok) throw new Error(data.error || 'Could not load requests.');
     renderRequests(data.requests || []);
   } catch (error) {
@@ -91,6 +141,26 @@ async function loadRequests() {
 }
 
 refreshButton.addEventListener('click', loadRequests);
+logoutButton.addEventListener('click', () => showLogin('Logged out.'));
+adminLoginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const submitButton = adminLoginForm.querySelector('button[type="submit"]');
+  const formData = new FormData(adminLoginForm);
+  const username = String(formData.get('username') || '').trim();
+  const password = String(formData.get('password') || '');
+
+  if (!username || !password) {
+    loginStatus.textContent = 'Enter both admin ID and password.';
+    return;
+  }
+
+  adminAuthToken = btoa(`${username}:${password}`);
+  sessionStorage.setItem(authStorageKey, adminAuthToken);
+  loginStatus.textContent = 'Checking login...';
+  submitButton.disabled = true;
+  await loadRequests();
+  submitButton.disabled = false;
+});
 requestRows.addEventListener('click', async (event) => {
   const button = event.target.closest('.delete-request');
   if (!button) return;
@@ -103,9 +173,14 @@ requestRows.addEventListener('click', async (event) => {
   statusText.textContent = `Deleting ${referenceId}...`;
   try {
     const response = await fetch(`/api/purchase-requests/${encodeURIComponent(referenceId)}`, {
-      method: 'DELETE'
+      method: 'DELETE',
+      headers: getAdminHeaders()
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response);
+    if (response.status === 401) {
+      showLogin('Please log in again.');
+      return;
+    }
     if (!response.ok) throw new Error(data.error || 'Could not delete request.');
     await loadRequests();
   } catch (error) {
@@ -125,10 +200,14 @@ requestRows.addEventListener('change', async (event) => {
   try {
     const response = await fetch(`/api/purchase-requests/${encodeURIComponent(referenceId)}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAdminHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ paymentStatus })
     });
-    const data = await response.json();
+    const data = await readJsonResponse(response);
+    if (response.status === 401) {
+      showLogin('Please log in again.');
+      return;
+    }
     if (!response.ok) throw new Error(data.error || 'Could not update payment status.');
     await loadRequests();
   } catch (error) {
