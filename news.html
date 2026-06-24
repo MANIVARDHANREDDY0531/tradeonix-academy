@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="TRADEONIX ACADEMY live India and global financial market news." />
+  <title>TRADEONIX Market News</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Manrope:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="news.css" />
+  <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
+</head>
+<body>
+  <header class="news-nav">
+    <a class="brand" href="black-gold-version.html">
+      <img src="tradeonix-logo.svg" alt="" />
+      <span><strong>TRADEONIX</strong><small>ACADEMY</small></span>
+    </a>
+    <a class="back-link" href="black-gold-version.html#market-news">Back to website</a>
+  </header>
+
+  <main>
+    <section class="news-hero">
+      <div>
+        <span class="eyebrow">Live Market Room</span>
+        <h1>India and global financial news.</h1>
+        <p>Readable market headlines for traders following Nifty, Bank Nifty, gold, crude, currencies, global stocks, and macro updates.</p>
+      </div>
+      <div class="hero-status">
+        <span></span>
+        <strong id="newsPageUpdated">Refreshing...</strong>
+        <button id="newsPageRefresh" type="button">Refresh</button>
+      </div>
+    </section>
+
+    <section class="news-board" aria-label="Latest market news">
+      <div class="news-column">
+        <div class="column-heading"><span>India</span><small>Nifty, Bank Nifty, RBI, rupee</small></div>
+        <div id="indiaNewsList" class="news-list">
+          <article class="news-item loading"><b>India</b><h2>Loading India market headlines...</h2><p>Connecting to live market feed.</p></article>
+        </div>
+      </div>
+      <div class="news-column">
+        <div class="column-heading"><span>Global</span><small>US markets, gold, crude, forex</small></div>
+        <div id="globalNewsList" class="news-list">
+          <article class="news-item loading"><b>Global</b><h2>Loading global market headlines...</h2><p>Connecting to live market feed.</p></article>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="news.js"></script>
+</body>
+</html>
