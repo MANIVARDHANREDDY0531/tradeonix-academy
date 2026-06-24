@@ -36,7 +36,7 @@ function renderList(container, items, category) {
     <article class="news-item ${category === 'Global' ? 'global' : 'india'}">
       <b>${escapeHtml(item.category || category)}</b>
       <h2><a href="${escapeHtml(item.url || '#')}" target="${item.url && item.url.startsWith('http') ? '_blank' : '_self'}" rel="noopener">${escapeHtml(item.title)}</a></h2>
-      <p>${escapeHtml(item.source || 'Market news')} · ${escapeHtml(timeAgo(item.publishedAt))}</p>
+      <p>${escapeHtml(item.source || 'Moneycontrol')} · ${escapeHtml(timeAgo(item.publishedAt))}</p>
     </article>
   `).join('');
 }

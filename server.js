@@ -397,7 +397,7 @@ function readRssTag(item, tag) {
   return decodeXml(match?.[1] || '');
 }
 
-function parseNewsItems(xml, category) {
+function parseNewsItems(xml, category, defaultSource = 'Market news') {
   return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)]
     .slice(0, 8)
     .map((match) => {
@@ -405,7 +405,7 @@ function parseNewsItems(xml, category) {
       return {
         category,
         title: readRssTag(item, 'title'),
-        source: readRssTag(item, 'source') || 'Market news',
+        source: readRssTag(item, 'source') || defaultSource,
         url: readRssTag(item, 'link'),
         publishedAt: readRssTag(item, 'pubDate')
       };
@@ -413,10 +413,19 @@ function parseNewsItems(xml, category) {
     .filter((item) => item.title && item.url);
 }
 
-async function fetchNewsCategory(category, query) {
-  const rssPath = `/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
-  const xml = await getText('news.google.com', rssPath);
-  return parseNewsItems(xml, category);
+async function fetchMoneycontrolFeed(category, feedPath) {
+  const xml = await getText('www.moneycontrol.com', feedPath);
+  return parseNewsItems(xml, category, 'Moneycontrol');
+}
+
+function uniqueNewsItems(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    const key = `${item.title}|${item.url}`.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function fallbackMarketNews() {
@@ -458,13 +467,15 @@ async function fetchMarketNews() {
   if (cached && Date.now() - cached.createdAt < 600_000) return cached.payload;
 
   try {
-    const [india, global] = await Promise.all([
-      fetchNewsCategory('India', 'India stock market OR Nifty OR Sensex OR RBI financial markets'),
-      fetchNewsCategory('Global', 'global financial markets OR US stocks OR gold OR crude oil OR forex')
+    const feeds = await Promise.allSettled([
+      fetchMoneycontrolFeed('India', '/rss/latestnews.xml'),
+      fetchMoneycontrolFeed('India', '/rss/business.xml'),
+      fetchMoneycontrolFeed('India', '/rss/marketreports.xml'),
+      fetchMoneycontrolFeed('Global', '/rss/worldnews.xml')
     ]);
-    const items = [...india.slice(0, 5), ...global.slice(0, 5)].slice(0, 10);
+    const items = uniqueNewsItems(feeds.flatMap((result) => result.status === 'fulfilled' ? result.value : [])).slice(0, 12);
     if (!items.length) throw new Error('No news items');
-    const payload = { updatedAt: new Date().toISOString(), items };
+    const payload = { updatedAt: new Date().toISOString(), source: 'Moneycontrol', items };
     marketNewsCache.set('latest', { createdAt: Date.now(), payload });
     return payload;
   } catch (error) {
