@@ -224,7 +224,7 @@ function ensureMarketNewsSection() {
   section.className = 'market-news section container';
   section.id = 'market-news';
   section.innerHTML = `
-    <div class="section-heading"><div><div class="eyebrow muted">Live market brief</div><h2>Financial news<br><em>as it moves.</em></h2></div><p>Track India and global market updates before you study the setups. Headlines refresh automatically while the site is open.</p></div>
+    <div class="section-heading news-heading"><div><div class="eyebrow muted">Live market brief</div><h2>Financial news<br><em>made readable.</em></h2></div><p>Quick India and global market updates in a simple briefing format. Open the full news room for more headlines.</p></div>
     <div class="news-shell">
       <div class="news-ticker" aria-label="Live financial market news ticker">
         <div class="news-ticker-track" id="newsTickerTrack">
@@ -233,12 +233,12 @@ function ensureMarketNewsSection() {
         </div>
       </div>
       <div class="news-toolbar">
-        <div><span class="news-live-dot"></span><strong>Market updates</strong><small id="newsUpdated">Refreshing...</small></div>
-        <button class="news-refresh" id="newsRefresh" type="button">Refresh</button>
+        <div><span class="news-live-dot"></span><strong>Market briefing</strong><small id="newsUpdated">Refreshing...</small></div>
+        <div class="news-actions"><a class="news-open-page" href="news.html">Open full news</a><button class="news-refresh" id="newsRefresh" type="button">Refresh</button></div>
       </div>
       <div class="news-grid" id="newsGrid">
-        <article class="news-card loading"><span>India</span><h3>Loading latest market headlines...</h3><p>Connecting to live news feed.</p></article>
-        <article class="news-card loading"><span>Global</span><h3>Loading global market headlines...</h3><p>Connecting to live news feed.</p></article>
+        <article class="news-card loading"><span>India</span><h3>Loading latest market headlines...</h3><p>Connecting to live news feed.</p><b>Read update</b></article>
+        <article class="news-card loading"><span>Global</span><h3>Loading global market headlines...</h3><p>Connecting to live news feed.</p><b>Read update</b></article>
       </div>
     </div>
   `;
@@ -265,10 +265,11 @@ function renderMarketNews(items = [], updatedAt) {
     { category: 'Global', title: 'Global markets watch US yields, gold, crude oil, and dollar movement.', source: 'TRADEONIX market brief', url: '#courses' }
   ];
   grid.innerHTML = cleanItems.slice(0, 6).map((item) => `
-    <article class="news-card">
+    <article class="news-card ${String(item.category || '').toLowerCase().includes('india') ? 'india-news' : 'global-news'}">
       <span>${escapeNews(item.category || 'Market')}</span>
       <h3><a href="${escapeNews(item.url || '#')}" target="${item.url && item.url.startsWith('http') ? '_blank' : '_self'}" rel="noopener">${escapeNews(item.title)}</a></h3>
       <p>${escapeNews(item.source || 'Market news')} · ${escapeNews(timeAgo(item.publishedAt))}</p>
+      <b>Read update</b>
     </article>
   `).join('');
   const tickerText = cleanItems.slice(0, 8).map((item) => `${item.category || 'Market'}: ${item.title}`).join('   •   ');
