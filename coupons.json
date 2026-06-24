@@ -1,9 +1,9 @@
 [
   {
-    "code": "WELCOME10",
+    "code": "FLASH10",
     "type": "percent",
     "value": 10,
-    "active": false,
+    "active": true,
     "description": "10% discount on all paid plans",
     "planIds": []
   },

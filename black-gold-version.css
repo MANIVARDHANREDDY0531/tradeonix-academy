@@ -110,13 +110,40 @@ body::after {
 }
 
 .announcement {
-  background: linear-gradient(90deg, #070a08, #231b0b, #070a08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 42px;
+  padding: 10px 18px;
+  background:
+    radial-gradient(circle at 25% 0%, rgba(185, 255, 102, .16), transparent 28%),
+    linear-gradient(90deg, #070a08, #2a1d07 48%, #070a08);
   color: var(--lux-gold-2);
   border-bottom: 1px solid rgba(247, 200, 91, .25);
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .announcement span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   background: var(--lux-gold);
+  box-shadow: 0 0 16px rgba(247, 200, 91, .85);
+}
+
+.announcement strong,
+.announcement b {
+  border: 1px solid rgba(247, 200, 91, .38);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #ffe7a0, #f7c85b);
+  color: #070a08;
+  box-shadow: 0 8px 22px rgba(247, 200, 91, .16);
 }
 
 .nav-wrap {
@@ -1373,6 +1400,19 @@ section {
 }
 
 @media (max-width: 760px) {
+  .announcement {
+    gap: 8px;
+    padding: 9px 12px;
+    font-size: 11px;
+    line-height: 1.45;
+    flex-wrap: wrap;
+  }
+
+  .announcement strong,
+  .announcement b {
+    padding: 5px 8px;
+  }
+
   html,
   body {
     width: 100%;
