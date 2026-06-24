@@ -1,4 +1,6 @@
 const indiaNewsList = document.querySelector('#indiaNewsList');
+const cryptoNewsList = document.querySelector('#cryptoNewsList');
+const forexNewsList = document.querySelector('#forexNewsList');
 const globalNewsList = document.querySelector('#globalNewsList');
 const newsPageUpdated = document.querySelector('#newsPageUpdated');
 const newsPageRefresh = document.querySelector('#newsPageRefresh');
@@ -25,20 +27,32 @@ function timeAgo(value) {
 function renderList(container, items, category) {
   const fallback = [{
     category,
-    title: category === 'India'
-      ? 'Nifty, Bank Nifty, RBI cues, rupee, and sector rotation remain key Indian market watchpoints.'
-      : 'Global traders are watching US yields, gold, crude oil, forex, and central-bank commentary.',
+    title: getFallbackTitle(category),
     source: 'TRADEONIX market brief',
     url: 'black-gold-version.html#courses'
   }];
   const cleanItems = items.length ? items : fallback;
   container.innerHTML = cleanItems.map((item) => `
-    <article class="news-item ${category === 'Global' ? 'global' : 'india'}">
+    <article class="news-item ${category.toLowerCase()}">
       <b>${escapeHtml(item.category || category)}</b>
       <h2><a href="${escapeHtml(item.url || '#')}" target="${item.url && item.url.startsWith('http') ? '_blank' : '_self'}" rel="noopener">${escapeHtml(item.title)}</a></h2>
-      <p>${escapeHtml(item.source || 'Moneycontrol')} · ${escapeHtml(timeAgo(item.publishedAt))}</p>
+      <p>${escapeHtml(item.source || 'Market news')} · ${escapeHtml(timeAgo(item.publishedAt))}</p>
     </article>
   `).join('');
+}
+
+function getFallbackTitle(category) {
+  const titles = {
+    India: 'Nifty, Bank Nifty, RBI cues, rupee, and sector rotation remain key Indian market watchpoints.',
+    Crypto: 'Crypto traders are watching Bitcoin, Ethereum, ETF flows, liquidity, and risk sentiment.',
+    Forex: 'Forex markets are tracking USD/INR, dollar index, yields, crude oil, and central-bank guidance.',
+    Global: 'Global traders are watching US yields, gold, crude oil, equities, and central-bank commentary.'
+  };
+  return titles[category] || titles.Global;
+}
+
+function hasCategory(item, category) {
+  return String(item.category || '').toLowerCase().includes(category.toLowerCase());
 }
 
 async function loadNewsPage() {
@@ -49,13 +63,17 @@ async function loadNewsPage() {
     if (!response.ok) throw new Error('News unavailable');
     const data = await response.json();
     const items = data.items || [];
-    renderList(indiaNewsList, items.filter((item) => String(item.category || '').toLowerCase().includes('india')), 'India');
-    renderList(globalNewsList, items.filter((item) => !String(item.category || '').toLowerCase().includes('india')), 'Global');
+    renderList(indiaNewsList, items.filter((item) => hasCategory(item, 'India')), 'India');
+    renderList(cryptoNewsList, items.filter((item) => hasCategory(item, 'Crypto')), 'Crypto');
+    renderList(forexNewsList, items.filter((item) => hasCategory(item, 'Forex')), 'Forex');
+    renderList(globalNewsList, items.filter((item) => hasCategory(item, 'Global')), 'Global');
     newsPageUpdated.textContent = data.updatedAt
       ? `Updated ${new Date(data.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
       : 'Live updates';
   } catch (error) {
     renderList(indiaNewsList, [], 'India');
+    renderList(cryptoNewsList, [], 'Crypto');
+    renderList(forexNewsList, [], 'Forex');
     renderList(globalNewsList, [], 'Global');
     newsPageUpdated.textContent = 'Showing market brief';
   } finally {

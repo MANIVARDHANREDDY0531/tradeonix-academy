@@ -205,6 +205,14 @@ h1 {
   background: var(--lime);
 }
 
+.news-item.crypto::before {
+  background: #82a8ff;
+}
+
+.news-item.forex::before {
+  background: #ffcf7a;
+}
+
 .news-item b {
   display: inline-flex;
   margin-bottom: 12px;

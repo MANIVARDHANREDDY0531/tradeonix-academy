@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const root = __dirname;
 const dataDir = path.join(root, 'data');
 const requestLog = path.join(dataDir, 'purchase-requests.jsonl');
+const couponsPath = path.join(root, 'coupons.json');
 const port = Number(process.env.PORT || 8766);
 
 loadEnv();
@@ -281,7 +282,8 @@ function buildAdminMessage(title, record) {
     `Phone: ${record.customer?.phone || '-'}`,
     `Email: ${record.customer?.email || '-'}`,
     `Plan: ${record.planName || record.planId || '-'}`,
-    `Amount: ${formatCurrency(record.planPrice)}`,
+    record.coupon?.code ? `Coupon: ${record.coupon.code} (${formatCurrency(record.discountAmount)} off)` : '',
+    `Amount: ${formatCurrency(record.finalPlanPrice ?? record.planPrice)}`,
     `Payment status: ${record.paymentStatus || '-'}`,
     record.razorpayPaymentId ? `Razorpay payment: ${record.razorpayPaymentId}` : '',
     record.message ? `Message: ${record.message}` : ''
@@ -294,9 +296,10 @@ function buildUserRequestMessage(record) {
     `We received your ${siteName} enrollment request.`,
     `Reference: ${record.referenceId}`,
     `Plan: ${record.planName}`,
-    `Amount: ${formatCurrency(record.planPrice)}`,
+    record.coupon?.code ? `Coupon applied: ${record.coupon.code}` : '',
+    `Amount: ${formatCurrency(record.finalPlanPrice ?? record.planPrice)}`,
     `Our team will contact you shortly.`
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function buildUserPaymentMessage(record) {
@@ -305,9 +308,10 @@ function buildUserPaymentMessage(record) {
     `Your payment for ${siteName} was successful.`,
     `Reference: ${record.referenceId}`,
     `Plan: ${record.planName}`,
-    `Amount: ${formatCurrency(record.planPrice)}`,
+    record.coupon?.code ? `Coupon applied: ${record.coupon.code}` : '',
+    `Amount: ${formatCurrency(record.finalPlanPrice ?? record.planPrice)}`,
     `Thank you for enrolling.`
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 function notifyNewRequest(record) {
@@ -418,10 +422,19 @@ async function fetchMoneycontrolFeed(category, feedPath) {
   return parseNewsItems(xml, category, 'Moneycontrol');
 }
 
+async function fetchGoogleNewsFeed(category, query) {
+  const rssPath = `/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+  const xml = await getText('news.google.com', rssPath);
+  return parseNewsItems(xml, category, 'Google News');
+}
+
 function uniqueNewsItems(items) {
   const seen = new Set();
-  return items.filter((item) => {
-    const key = `${item.title}|${item.url}`.toLowerCase();
+  return items
+    .filter((item) => item.title && item.url)
+    .sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0))
+    .filter((item) => {
+    const key = String(item.title || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -446,8 +459,15 @@ function fallbackMarketNews() {
       publishedAt: now
     },
     {
-      category: 'Global',
-      title: 'Global markets are tracking US yields, dollar movement, gold, crude oil, and central-bank commentary.',
+      category: 'Crypto',
+      title: 'Crypto traders are watching Bitcoin, Ethereum, ETF flows, liquidity, and risk sentiment.',
+      source: 'TRADEONIX market brief',
+      url: '#courses',
+      publishedAt: now
+    },
+    {
+      category: 'Forex',
+      title: 'Forex markets are tracking USD/INR, dollar index, yields, crude oil, and central-bank guidance.',
       source: 'TRADEONIX market brief',
       url: '#courses',
       publishedAt: now
@@ -471,11 +491,15 @@ async function fetchMarketNews() {
       fetchMoneycontrolFeed('India', '/rss/latestnews.xml'),
       fetchMoneycontrolFeed('India', '/rss/business.xml'),
       fetchMoneycontrolFeed('India', '/rss/marketreports.xml'),
-      fetchMoneycontrolFeed('Global', '/rss/worldnews.xml')
+      fetchMoneycontrolFeed('Global', '/rss/worldnews.xml'),
+      fetchGoogleNewsFeed('India', 'Nifty OR Sensex OR Bank Nifty OR NSE OR BSE Indian stock market'),
+      fetchGoogleNewsFeed('Crypto', 'Bitcoin OR Ethereum OR crypto market OR cryptocurrency regulation OR crypto ETF'),
+      fetchGoogleNewsFeed('Forex', 'forex market OR USD INR OR dollar index OR currency market OR rupee'),
+      fetchGoogleNewsFeed('Global', 'global stock markets OR US markets OR gold OR crude oil OR bond yields')
     ]);
-    const items = uniqueNewsItems(feeds.flatMap((result) => result.status === 'fulfilled' ? result.value : [])).slice(0, 12);
+    const items = uniqueNewsItems(feeds.flatMap((result) => result.status === 'fulfilled' ? result.value : [])).slice(0, 24);
     if (!items.length) throw new Error('No news items');
-    const payload = { updatedAt: new Date().toISOString(), source: 'Moneycontrol', items };
+    const payload = { updatedAt: new Date().toISOString(), source: 'Moneycontrol + global market feeds', items };
     marketNewsCache.set('latest', { createdAt: Date.now(), payload });
     return payload;
   } catch (error) {
@@ -485,6 +509,24 @@ async function fetchMarketNews() {
 
 async function handleMarketNews(request, response) {
   sendJson(response, 200, await fetchMarketNews());
+}
+
+function handleValidateCoupon(request, response) {
+  try {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const planId = clean(url.searchParams.get('planId'));
+    const couponCode = clean(url.searchParams.get('couponCode'));
+    const pricing = calculatePlanPricing(planId, couponCode);
+    sendJson(response, 200, {
+      ok: true,
+      originalAmount: pricing.originalPaise,
+      discountAmount: pricing.discountPaise,
+      payableAmount: pricing.payablePaise,
+      coupon: pricing.coupon
+    });
+  } catch (error) {
+    sendJson(response, error.statusCode || 400, { error: error.message || 'Could not apply coupon.' });
+  }
 }
 
 function loadEnv() {
@@ -528,6 +570,76 @@ function isValidEmail(value) {
 
 function isValidPhone(value) {
   return /^[0-9+\-\s()]{7,20}$/.test(value);
+}
+
+function normalizeCouponCode(value) {
+  return clean(value).toUpperCase().replace(/\s+/g, '');
+}
+
+function readCoupons() {
+  if (!fs.existsSync(couponsPath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(couponsPath, 'utf8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function calculatePlanPricing(planId, couponCode) {
+  const plan = plans[planId];
+  if (!plan) throw { statusCode: 400, message: 'Please choose a valid plan.' };
+
+  const originalPaise = Math.round(Number(plan.price || 0) * 100);
+  const code = normalizeCouponCode(couponCode);
+  if (!code || !originalPaise) {
+    return {
+      originalPaise,
+      discountPaise: 0,
+      payablePaise: originalPaise,
+      coupon: null
+    };
+  }
+
+  const coupon = readCoupons().find((item) => normalizeCouponCode(item.code) === code);
+  if (!coupon || coupon.active !== true) {
+    throw { statusCode: 400, message: 'This coupon code is not valid.' };
+  }
+
+  const allowedPlans = Array.isArray(coupon.planIds) ? coupon.planIds : [];
+  if (allowedPlans.length && !allowedPlans.includes(planId)) {
+    throw { statusCode: 400, message: 'This coupon is not available for this plan.' };
+  }
+
+  const type = clean(coupon.type).toLowerCase();
+  const value = Number(coupon.value || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw { statusCode: 400, message: 'This coupon code is not valid.' };
+  }
+
+  let discountPaise = 0;
+  if (type === 'percent') {
+    discountPaise = Math.round(originalPaise * Math.min(value, 100) / 100);
+  } else if (type === 'fixed') {
+    discountPaise = Math.round(value * 100);
+  } else {
+    throw { statusCode: 400, message: 'This coupon code is not valid.' };
+  }
+
+  discountPaise = Math.min(discountPaise, Math.max(0, originalPaise - 100));
+  const payablePaise = Math.max(100, originalPaise - discountPaise);
+
+  return {
+    originalPaise,
+    discountPaise,
+    payablePaise,
+    coupon: {
+      code,
+      type,
+      value,
+      description: clean(coupon.description)
+    }
+  };
 }
 
 function readPurchaseRequests() {
@@ -713,7 +825,9 @@ async function handleCreateOrder(request, response) {
     const email = clean(body.email).toLowerCase();
     const phone = clean(body.phone);
     const message = clean(body.message);
-    const amount = Number(body.amount || (plan ? plan.price * 100 : 0));
+    const couponCode = normalizeCouponCode(body.couponCode);
+    const pricing = calculatePlanPricing(planId, couponCode);
+    const amount = pricing.payablePaise;
     const currency = clean(body.currency || 'INR').toUpperCase();
 
     if (!plan) return sendJson(response, 400, { error: 'Please choose a valid plan.' });
@@ -734,6 +848,10 @@ async function handleCreateOrder(request, response) {
       planId,
       planName: plan.name,
       planPrice: plan.price,
+      originalPlanPrice: pricing.originalPaise / 100,
+      discountAmount: pricing.discountPaise / 100,
+      finalPlanPrice: pricing.payablePaise / 100,
+      coupon: pricing.coupon,
       razorpayOrderId: order.id,
       customer: { name, email, phone },
       message,
@@ -747,6 +865,10 @@ async function handleCreateOrder(request, response) {
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
+      originalAmount: pricing.originalPaise,
+      discountAmount: pricing.discountPaise,
+      payableAmount: pricing.payablePaise,
+      coupon: pricing.coupon,
       referenceId
     });
   } catch (error) {
@@ -933,6 +1055,10 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url.startsWith('/api/market-news')) {
     handleMarketNews(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url.startsWith('/api/validate-coupon')) {
+    handleValidateCoupon(request, response);
     return;
   }
   if (request.method === 'POST' && request.url === '/api/create-order') {

@@ -1,0 +1,18 @@
+[
+  {
+    "code": "WELCOME10",
+    "type": "percent",
+    "value": 10,
+    "active": false,
+    "description": "10% discount on all paid plans",
+    "planIds": []
+  },
+  {
+    "code": "MASTER5000",
+    "type": "fixed",
+    "value": 5000,
+    "active": false,
+    "description": "Rs. 5,000 off on Trading MasterClass",
+    "planIds": ["trading-masterclass"]
+  }
+]

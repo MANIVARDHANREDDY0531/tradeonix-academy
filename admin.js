@@ -88,7 +88,7 @@ function escapeHtml(value) {
 function renderRequests(requests) {
   totalRequests.textContent = requests.length;
   latestRequest.textContent = requests[0] ? formatDate(requests[0].createdAt) : 'None';
-  totalValue.textContent = formatAmount(requests.reduce((sum, item) => sum + Number(item.planPrice || 0), 0));
+  totalValue.textContent = formatAmount(requests.reduce((sum, item) => sum + Number(item.finalPlanPrice ?? item.planPrice ?? 0), 0));
 
   if (!requests.length) {
     requestRows.innerHTML = '<tr><td colspan="9" class="empty">No requests yet.</td></tr>';
@@ -102,7 +102,7 @@ function renderRequests(requests) {
       <td><strong>${escapeHtml(item.customer?.name)}</strong></td>
       <td><a href="mailto:${escapeHtml(item.customer?.email)}">${escapeHtml(item.customer?.email)}</a><small>${escapeHtml(item.customer?.phone)}</small></td>
       <td>${escapeHtml(item.planName)}</td>
-      <td><strong>${formatAmount(item.planPrice)}</strong></td>
+      <td><strong>${formatAmount(item.finalPlanPrice ?? item.planPrice)}</strong>${item.coupon?.code ? `<small>Coupon ${escapeHtml(item.coupon.code)} saved ${formatAmount(item.discountAmount)}</small>` : ''}</td>
       <td>${renderPaymentStatus(item.referenceId, getPaymentStatus(item))}</td>
       <td>${escapeHtml(item.message || '-')}</td>
       <td>${formatDate(item.createdAt)}</td>
