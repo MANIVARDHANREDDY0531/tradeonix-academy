@@ -217,7 +217,92 @@ setInterval(updateAllMarkets, 30000);
 updateHeaderMarkets();
 setInterval(updateHeaderMarkets, 45000);
 
-const revealItems = document.querySelectorAll('.section-heading, .course-card, .step, .testimonial-grid blockquote, .faq details, .cta-inner > div');
+function ensureMarketNewsSection() {
+  const courses = document.querySelector('#courses');
+  if (!courses || document.querySelector('#market-news')) return;
+  const section = document.createElement('section');
+  section.className = 'market-news section container';
+  section.id = 'market-news';
+  section.innerHTML = `
+    <div class="section-heading"><div><div class="eyebrow muted">Live market brief</div><h2>Financial news<br><em>as it moves.</em></h2></div><p>Track India and global market updates before you study the setups. Headlines refresh automatically while the site is open.</p></div>
+    <div class="news-shell">
+      <div class="news-ticker" aria-label="Live financial market news ticker">
+        <div class="news-ticker-track" id="newsTickerTrack">
+          <span>Loading India and global market headlines...</span>
+          <span>Loading India and global market headlines...</span>
+        </div>
+      </div>
+      <div class="news-toolbar">
+        <div><span class="news-live-dot"></span><strong>Market updates</strong><small id="newsUpdated">Refreshing...</small></div>
+        <button class="news-refresh" id="newsRefresh" type="button">Refresh</button>
+      </div>
+      <div class="news-grid" id="newsGrid">
+        <article class="news-card loading"><span>India</span><h3>Loading latest market headlines...</h3><p>Connecting to live news feed.</p></article>
+        <article class="news-card loading"><span>Global</span><h3>Loading global market headlines...</h3><p>Connecting to live news feed.</p></article>
+      </div>
+    </div>
+  `;
+  courses.insertAdjacentElement('afterend', section);
+}
+
+function timeAgo(value) {
+  const published = value ? new Date(value).getTime() : 0;
+  if (!published || Number.isNaN(published)) return 'Live update';
+  const minutes = Math.max(1, Math.round((Date.now() - published) / 60000));
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  return `${Math.round(hours / 24)} day ago`;
+}
+
+function renderMarketNews(items = [], updatedAt) {
+  const grid = document.querySelector('#newsGrid');
+  const ticker = document.querySelector('#newsTickerTrack');
+  const updated = document.querySelector('#newsUpdated');
+  if (!grid || !ticker) return;
+  const cleanItems = items.length ? items : [
+    { category: 'India', title: 'Nifty, Bank Nifty, RBI cues, and sector rotation remain in focus.', source: 'TRADEONIX market brief', url: '#courses' },
+    { category: 'Global', title: 'Global markets watch US yields, gold, crude oil, and dollar movement.', source: 'TRADEONIX market brief', url: '#courses' }
+  ];
+  grid.innerHTML = cleanItems.slice(0, 6).map((item) => `
+    <article class="news-card">
+      <span>${escapeNews(item.category || 'Market')}</span>
+      <h3><a href="${escapeNews(item.url || '#')}" target="${item.url && item.url.startsWith('http') ? '_blank' : '_self'}" rel="noopener">${escapeNews(item.title)}</a></h3>
+      <p>${escapeNews(item.source || 'Market news')} · ${escapeNews(timeAgo(item.publishedAt))}</p>
+    </article>
+  `).join('');
+  const tickerText = cleanItems.slice(0, 8).map((item) => `${item.category || 'Market'}: ${item.title}`).join('   •   ');
+  ticker.innerHTML = `<span>${escapeNews(tickerText)}</span><span>${escapeNews(tickerText)}</span>`;
+  if (updated) updated.textContent = updatedAt ? `Updated ${new Date(updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Live updates';
+}
+
+function escapeNews(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+async function updateMarketNews() {
+  ensureMarketNewsSection();
+  try {
+    const response = await fetch('/api/market-news', { cache: 'no-store' });
+    if (!response.ok) throw new Error('News unavailable');
+    const data = await response.json();
+    renderMarketNews(data.items, data.updatedAt);
+  } catch (error) {
+    renderMarketNews();
+  }
+}
+
+ensureMarketNewsSection();
+document.querySelector('#newsRefresh')?.addEventListener('click', updateMarketNews);
+updateMarketNews();
+setInterval(updateMarketNews, 600000);
+
+const revealItems = document.querySelectorAll('.section-heading, .course-card, .news-card, .step, .testimonial-grid blockquote, .faq details, .cta-inner > div');
 if ('IntersectionObserver' in window) {
   revealItems.forEach((item) => item.classList.add('reveal-ready'));
   const revealObserver = new IntersectionObserver((entries) => {

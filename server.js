@@ -15,6 +15,7 @@ const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
 const razorpayWebhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET || '';
 const marketCache = new Map();
+const marketNewsCache = new Map();
 const siteName = process.env.SITE_NAME || 'TRADEONIX ACADEMY';
 const adminEmail = process.env.ADMIN_EMAIL || '';
 const adminWhatsappNumber = process.env.ADMIN_WHATSAPP_NUMBER || '';
@@ -147,6 +148,37 @@ function getJson(hostname, requestPath) {
     });
     request.setTimeout(7000, () => {
       request.destroy(new Error('Market data request timed out'));
+    });
+    request.on('error', reject);
+    request.end();
+  });
+}
+
+function getText(hostname, requestPath) {
+  return new Promise((resolve, reject) => {
+    const request = https.request({
+      hostname,
+      path: requestPath,
+      method: 'GET',
+      headers: {
+        Accept: 'application/rss+xml,text/xml,text/plain',
+        'User-Agent': 'Mozilla/5.0 TradeonixAcademy/1.0'
+      }
+    }, (apiResponse) => {
+      let body = '';
+      apiResponse.on('data', (chunk) => {
+        body += chunk;
+      });
+      apiResponse.on('end', () => {
+        if (apiResponse.statusCode < 200 || apiResponse.statusCode >= 300) {
+          reject(new Error(`News feed returned ${apiResponse.statusCode}`));
+          return;
+        }
+        resolve(body);
+      });
+    });
+    request.setTimeout(8000, () => {
+      request.destroy(new Error('News feed request timed out'));
     });
     request.on('error', reject);
     request.end();
@@ -345,6 +377,103 @@ async function handleMarketData(request, response) {
   } catch (error) {
     sendJson(response, 502, { error: 'Could not load market data.' });
   }
+}
+
+function decodeXml(value) {
+  return String(value || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
+function readRssTag(item, tag) {
+  const match = item.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return decodeXml(match?.[1] || '');
+}
+
+function parseNewsItems(xml, category) {
+  return [...xml.matchAll(/<item\b[^>]*>([\s\S]*?)<\/item>/gi)]
+    .slice(0, 8)
+    .map((match) => {
+      const item = match[1];
+      return {
+        category,
+        title: readRssTag(item, 'title'),
+        source: readRssTag(item, 'source') || 'Market news',
+        url: readRssTag(item, 'link'),
+        publishedAt: readRssTag(item, 'pubDate')
+      };
+    })
+    .filter((item) => item.title && item.url);
+}
+
+async function fetchNewsCategory(category, query) {
+  const rssPath = `/rss/search?q=${encodeURIComponent(query)}&hl=en-IN&gl=IN&ceid=IN:en`;
+  const xml = await getText('news.google.com', rssPath);
+  return parseNewsItems(xml, category);
+}
+
+function fallbackMarketNews() {
+  const now = new Date().toISOString();
+  return [
+    {
+      category: 'India',
+      title: 'Nifty 50, Bank Nifty, rupee, crude, and FII/DII flows remain key Indian market watchpoints.',
+      source: 'TRADEONIX market brief',
+      url: '#courses',
+      publishedAt: now
+    },
+    {
+      category: 'India',
+      title: 'Indian traders are watching RBI cues, quarterly earnings, and sector rotation for near-term direction.',
+      source: 'TRADEONIX market brief',
+      url: '#courses',
+      publishedAt: now
+    },
+    {
+      category: 'Global',
+      title: 'Global markets are tracking US yields, dollar movement, gold, crude oil, and central-bank commentary.',
+      source: 'TRADEONIX market brief',
+      url: '#courses',
+      publishedAt: now
+    },
+    {
+      category: 'Global',
+      title: 'Crypto and precious metals remain sensitive to liquidity, risk sentiment, and macro data releases.',
+      source: 'TRADEONIX market brief',
+      url: '#courses',
+      publishedAt: now
+    }
+  ];
+}
+
+async function fetchMarketNews() {
+  const cached = marketNewsCache.get('latest');
+  if (cached && Date.now() - cached.createdAt < 600_000) return cached.payload;
+
+  try {
+    const [india, global] = await Promise.all([
+      fetchNewsCategory('India', 'India stock market OR Nifty OR Sensex OR RBI financial markets'),
+      fetchNewsCategory('Global', 'global financial markets OR US stocks OR gold OR crude oil OR forex')
+    ]);
+    const items = [...india.slice(0, 5), ...global.slice(0, 5)].slice(0, 10);
+    if (!items.length) throw new Error('No news items');
+    const payload = { updatedAt: new Date().toISOString(), items };
+    marketNewsCache.set('latest', { createdAt: Date.now(), payload });
+    return payload;
+  } catch (error) {
+    return { updatedAt: new Date().toISOString(), items: fallbackMarketNews(), fallback: true };
+  }
+}
+
+async function handleMarketNews(request, response) {
+  sendJson(response, 200, await fetchMarketNews());
 }
 
 function loadEnv() {
@@ -789,6 +918,10 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url.startsWith('/api/market-data')) {
     handleMarketData(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url.startsWith('/api/market-news')) {
+    handleMarketNews(request, response);
     return;
   }
   if (request.method === 'POST' && request.url === '/api/create-order') {

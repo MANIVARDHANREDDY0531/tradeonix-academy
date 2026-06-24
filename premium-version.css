@@ -1,0 +1,200 @@
+body {
+  background:
+    radial-gradient(circle at 10% 3%, rgba(243, 201, 105, .34), transparent 25%),
+    radial-gradient(circle at 86% 12%, rgba(185, 255, 102, .32), transparent 26%),
+    linear-gradient(180deg, #101713 0, #101713 540px, #f4efe2 541px, #f7f3e9 100%);
+}
+
+body::after {
+  opacity: .55;
+}
+
+.announcement {
+  background: linear-gradient(90deg, #f3c969, #dfff9f, #f3c969);
+  color: #111713;
+  font-weight: 800;
+}
+
+.announcement span {
+  background: #111713;
+  box-shadow: 0 0 18px rgba(17, 23, 19, .35);
+}
+
+.nav-wrap {
+  background: rgba(16, 23, 19, .72);
+  border-bottom-color: rgba(243, 201, 105, .16);
+}
+
+.brand,
+.nav-links a {
+  color: #fff8e8;
+}
+
+.nav-links a:hover {
+  color: #f3c969;
+}
+
+.menu-button span {
+  background: #fff8e8;
+}
+
+.hero {
+  color: #fff8e8;
+  min-height: 720px;
+}
+
+.hero::after {
+  color: rgba(255, 255, 255, .045);
+  content: "TRADEONIX";
+}
+
+.hero .eyebrow,
+.hero-copy > p,
+.trust-row small {
+  color: rgba(255, 248, 232, .72);
+}
+
+.hero h1 em {
+  background: linear-gradient(90deg, #fff, #f3c969 45%, #b9ff66);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.text-link {
+  color: #fff8e8;
+}
+
+.play {
+  border-color: rgba(255, 255, 255, .28);
+}
+
+.trust-row {
+  background: rgba(255, 255, 255, .08);
+  border-color: rgba(255, 255, 255, .14);
+  backdrop-filter: blur(18px);
+}
+
+.dashboard {
+  transform: rotate(-1deg);
+  border-color: rgba(243, 201, 105, .3);
+  box-shadow:
+    0 34px 90px rgba(0, 0, 0, .34),
+    0 0 0 8px rgba(243, 201, 105, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .13);
+}
+
+.ticker {
+  border-top: 1px solid rgba(243, 201, 105, .28);
+  border-bottom: 1px solid rgba(17, 23, 19, .1);
+}
+
+.section-heading h2,
+.method h2,
+.faq h2,
+.cta-section h2 {
+  letter-spacing: -.065em;
+}
+
+.courses {
+  margin-top: -20px;
+}
+
+.course-card {
+  border-radius: 22px;
+  padding: 30px;
+}
+
+.course-card.featured {
+  background:
+    radial-gradient(circle at 20% 0, rgba(255, 255, 255, .46), transparent 32%),
+    linear-gradient(145deg, #f3c969, #dfff9f 42%, #b9ff66);
+}
+
+.value-card {
+  border-color: #111713;
+  background:
+    radial-gradient(circle at 75% 5%, rgba(185, 255, 102, .34), transparent 34%),
+    linear-gradient(145deg, #111713, #26342b);
+  color: #fff8e8;
+}
+
+.value-card h3,
+.value-card .offer-price {
+  color: #fff8e8;
+}
+
+.value-card p,
+.value-card li,
+.value-card .level,
+.value-card .card-bottom small {
+  color: rgba(255, 248, 232, .72);
+}
+
+.value-card .course-icon {
+  background: linear-gradient(135deg, #f3c969, #b9ff66);
+  color: #111713;
+}
+
+.value-card .card-bottom {
+  border-top-color: rgba(255, 255, 255, .16);
+}
+
+.value-card .round-button {
+  background: #f3c969;
+  color: #111713;
+}
+
+.value-ribbon,
+.save-badge {
+  background: #f3c969;
+  color: #111713;
+}
+
+.original-price {
+  color: rgba(255, 248, 232, .52);
+}
+
+.method {
+  border-radius: 34px;
+  width: min(1180px, calc(100% - 48px));
+  margin: 0 auto;
+}
+
+.testimonial-grid blockquote {
+  border-radius: 22px;
+}
+
+details {
+  border-radius: 18px;
+}
+
+.cta-section {
+  margin: 0 auto;
+  width: min(1180px, calc(100% - 48px));
+  border-radius: 34px;
+}
+
+footer {
+  margin-top: 90px;
+}
+
+@media (max-width: 900px) {
+  .nav-links.open {
+    background: #101713;
+  }
+
+  .method,
+  .cta-section {
+    width: 100%;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  body {
+    background:
+      radial-gradient(circle at 10% 3%, rgba(243, 201, 105, .3), transparent 28%),
+      linear-gradient(180deg, #101713 0, #101713 650px, #f7f3e9 651px, #f7f3e9 100%);
+  }
+}
