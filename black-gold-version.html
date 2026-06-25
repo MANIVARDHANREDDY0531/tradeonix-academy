@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="market.css?v=8" />
   <link rel="stylesheet" href="ui-polish.css?v=8" />
   <link rel="stylesheet" href="premium-version.css?v=8" />
-  <link rel="stylesheet" href="black-gold-version.css?v=13" />
+  <link rel="stylesheet" href="black-gold-version.css?v=14" />
   <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
   <style>.live-area{fill:rgba(185,255,102,.14)}.course-grid{grid-template-columns:repeat(2,1fr)}.value-card{border:2px solid var(--ink);position:relative;overflow:hidden}.value-card .badge{background:var(--lime);color:var(--ink)}.offer-pricing{display:flex;align-items:flex-end;gap:10px;flex-wrap:wrap}.original-price{color:#858d87;font:600 14px var(--font-display);text-decoration-thickness:2px;text-decoration-color:#e04f3e}.offer-price{color:var(--ink);animation:offer-pop .7s cubic-bezier(.2,.9,.3,1.25) both}.save-badge{display:inline-block;background:var(--ink);color:var(--lime);border-radius:4px;padding:3px 7px;font-size:9px;font-weight:800;letter-spacing:.06em;animation:offer-pulse 2.2s ease-in-out infinite}@keyframes offer-pop{from{opacity:0;transform:translateY(8px) scale(.88)}to{opacity:1;transform:none}}@keyframes offer-pulse{50%{box-shadow:0 0 0 6px rgba(17,23,19,.08)}}@media(prefers-reduced-motion:reduce){.offer-price,.save-badge{animation:none}}@media(max-width:900px){.course-card:last-child{grid-column:auto}}@media(max-width:620px){.course-grid{grid-template-columns:1fr}}</style>
   <style>.value-card{box-shadow:0 14px 36px rgba(17,23,19,.12);animation:value-glow 3s ease-in-out infinite}.value-card:before{content:"";position:absolute;inset:-70% -40%;background:linear-gradient(110deg,transparent 42%,rgba(185,255,102,.22) 50%,transparent 58%);transform:translateX(-45%);animation:value-sweep 3.8s ease-in-out infinite;pointer-events:none}.value-card>*{position:relative;z-index:1}.value-ribbon{align-self:flex-start;display:inline-flex;align-items:center;gap:8px;margin:2px 0 0;padding:8px 13px;border-radius:999px;background:var(--ink);color:white;font-size:10px;font-weight:800;letter-spacing:.11em;box-shadow:0 7px 18px rgba(17,23,19,.18)}.value-ribbon span{color:var(--lime);font-size:13px;animation:value-star 1.7s ease-in-out infinite}@keyframes value-glow{50%{box-shadow:0 18px 46px rgba(112,180,43,.25);border-color:#72ba30}}@keyframes value-sweep{0%,22%{transform:translateX(-55%)}70%,100%{transform:translateX(55%)}}@keyframes value-star{50%{transform:rotate(90deg) scale(1.25)}}@media(prefers-reduced-motion:reduce){.value-card,.value-card:before,.value-ribbon span{animation:none}}</style>
@@ -100,11 +100,21 @@
     <section class="ticker" aria-label="Course topics"><div class="ticker-inner"><span>MARKET STRUCTURE</span><i>✦</i><span>INDIAN STOCK MARKET</span><i>✦</i><span>CRYPTO MARKET</span><i>✦</i><span>FOREX MARKET</span><i>✦</i><span>RISK MANAGEMENT</span><i>✦</i><span>PRICE ACTION</span></div></section>
 
     <section class="markets-taught section container" aria-label="Markets taught at TRADEONIX ACADEMY">
-      <div class="section-heading"><div><div class="eyebrow muted">Markets we teach</div><h2>Learn to read<br><em>global opportunities.</em></h2></div><p>TRADEONIX ACADEMY helps students understand three major trading worlds with a practical, risk-first learning style.</p></div>
+      <div class="section-heading"><div><div class="eyebrow muted">Markets we teach</div><h2>Learn to read<br><em>global opportunities.</em></h2></div><p>Visual lessons, live-market examples, and logo-based market modules make the learning path feel clear before a student ever joins.</p></div>
+      <figure class="market-image-preview">
+        <img src="market-lesson-preview.svg" alt="TRADEONIX Academy visual lesson preview with market charts and module logos" />
+      </figure>
+      <div class="market-brand-strip" aria-label="Market modules">
+        <span><b>N50</b><small>Nifty 50</small></span>
+        <span><b>BN</b><small>Bank Nifty</small></span>
+        <span><b>BTC</b><small>Crypto</small></span>
+        <span><b>XAU</b><small>Gold</small></span>
+        <span><b>FX</b><small>Forex</small></span>
+      </div>
       <div class="market-focus-grid">
-        <article class="market-focus-card"><span>01</span><h3>Indian Stock Market</h3><p>Learn NIFTY, Bank NIFTY, equity price action, market structure, support and resistance, and disciplined intraday decision-making.</p></article>
-        <article class="market-focus-card"><span>02</span><h3>Crypto Market</h3><p>Understand BTC and major crypto movements with trend analysis, volatility awareness, risk control, and clean chart-reading methods.</p></article>
-        <article class="market-focus-card"><span>03</span><h3>Forex Market</h3><p>Study global currency pairs, XAU/USD, sessions, momentum, liquidity zones, and the process behind high-quality trade setups.</p></article>
+        <article class="market-focus-card visual-market-card"><div class="market-card-visual"><b>N50</b><svg viewBox="0 0 260 120" aria-hidden="true"><path d="M5 92 C40 70 62 84 94 56 C128 26 152 48 184 30 C214 12 232 18 255 8"/><path d="M5 94H255M5 62H255M5 30H255"/></svg></div><span>01</span><h3>Indian Stock Market</h3><p>Learn NIFTY, Bank NIFTY, equity price action, support and resistance, and disciplined intraday decisions.</p></article>
+        <article class="market-focus-card visual-market-card"><div class="market-card-visual"><b>BTC</b><svg viewBox="0 0 260 120" aria-hidden="true"><path d="M5 82 C38 38 64 72 94 42 C128 4 150 82 184 44 C214 12 232 54 255 26"/><path d="M5 94H255M5 62H255M5 30H255"/></svg></div><span>02</span><h3>Crypto Market</h3><p>Understand BTC and major crypto moves with trend analysis, volatility awareness, and clean chart-reading.</p></article>
+        <article class="market-focus-card visual-market-card"><div class="market-card-visual"><b>XAU</b><svg viewBox="0 0 260 120" aria-hidden="true"><path d="M5 86 C42 82 68 62 98 66 C132 72 150 32 184 36 C218 42 232 22 255 18"/><path d="M5 94H255M5 62H255M5 30H255"/></svg></div><span>03</span><h3>Forex and Gold</h3><p>Study XAU/USD, currency sessions, liquidity zones, and the process behind high-quality trade setups.</p></article>
       </div>
     </section>
 
@@ -119,7 +129,25 @@
 
     <section class="method section" id="method"><div class="container method-grid"><div><div class="eyebrow light">A better way to learn</div><h2>Less noise.<br><em>More clarity.</em></h2><p>Trading isn’t about predicting every move. It’s about knowing what to do when the market gives you a clear opportunity.</p><a class="button button-light" href="#courses">Explore the curriculum <span>→</span></a></div><div class="steps"><div class="step"><b>01</b><div><h3>Learn the framework</h3><p>Clear concepts, concise lessons, and zero unnecessary complexity.</p></div></div><div class="step"><b>02</b><div><h3>Watch it in context</h3><p>Real chart breakdowns show how every idea works in the market.</p></div></div><div class="step"><b>03</b><div><h3>Practice with feedback</h3><p>Use guided exercises and live sessions to refine your decision-making.</p></div></div></div></div></section>
 
-    <section class="results section container" id="results"><div class="section-heading"><div><div class="eyebrow muted">Student stories</div><h2>Progress you can<br><em>actually feel.</em></h2></div><div class="rating"><strong>4.9</strong><span class="stars">★★★★★</span><small>from 380+ verified reviews</small></div></div><div class="testimonial-grid"><blockquote>“For the first time, I stopped jumping between strategies. The framework gave me a process I can actually follow.”<footer><span>RS</span><div><b>Rohan S.</b><small>Blueprint student</small></div></footer></blockquote><blockquote>“The risk module alone changed how I trade. I’m calmer, more selective, and no longer trying to win every trade.”<footer><span>NP</span><div><b>Neha P.</b><small>Risk course student</small></div></footer></blockquote><blockquote>“Live breakdowns connected all the dots. It feels like learning to read a language instead of memorising patterns.”<footer><span>AM</span><div><b>Arjun M.</b><small>Price Action student</small></div></footer></blockquote></div></section>
+    <section class="results section container" id="results"><div class="section-heading"><div><div class="eyebrow muted">Why learners enquire</div><h2>Built for people who want<br><em>clarity before taking risk.</em></h2></div><div class="rating"><strong>Guidance first</strong><span class="stars">★★★★★</span><small>Real student reviews can be added after you collect feedback.</small></div></div><div class="testimonial-grid trust-grid"><blockquote><b>For beginners</b><p>Start with market basics, terminology, chart structure, and simple risk rules before live execution.</p><footer><span>N</span><div><b>Nifty / Bank Nifty</b><small>Indian market module</small></div></footer></blockquote><blockquote><b>For confused traders</b><p>Move away from random strategies and learn a repeatable process for reading markets with discipline.</p><footer><span>R</span><div><b>Risk-first learning</b><small>Process over prediction</small></div></footer></blockquote><blockquote><b>For restart journeys</b><p>If losses created fear, rebuild with structured lessons, position sizing, psychology, and mentor guidance.</p><footer><span>M</span><div><b>Mentor support</b><small>Doubt clearing and direction</small></div></footer></blockquote></div></section>
+
+    <section class="lead-section section container" id="lead">
+      <div class="lead-panel">
+        <div class="lead-visual" aria-hidden="true">
+          <div class="lead-phone">
+            <div class="lead-phone-top"></div>
+            <div class="lead-chart"><span></span><span></span><span></span></div>
+            <div class="lead-logo-row"><b>N50</b><b>BTC</b><b>XAU</b></div>
+          </div>
+        </div>
+        <div class="lead-copy">
+          <div class="eyebrow light">Need guidance?</div>
+          <h2>Not sure which plan is right for you?</h2>
+          <p>Send your details and our team can guide you on the right course path. This creates a lead in your admin page.</p>
+          <a class="button button-light purchase-trigger" href="#checkout" data-plan-id="consultation" data-plan-name="Free course guidance call" data-plan-price="0">Request a callback <span>→</span></a>
+        </div>
+      </div>
+    </section>
 
     <section class="faq section container" id="faq"><div><div class="eyebrow muted">Questions, answered</div><h2>Before you<br><em>get started.</em></h2><p>Still unsure? Write to us at <a href="mailto:support@tradeonix.in">support@tradeonix.in</a></p></div><div class="accordion"><details open><summary>Are these courses suitable for complete beginners?<span>+</span></summary><p>Yes. The Complete Beginner Trader Blueprint starts from first principles and builds step-by-step, with no prior trading knowledge assumed.</p></details><details><summary>How long do I get access?<span>+</span></summary><p>The Complete Beginner Trader Blueprint is available with either 3 months or 6 months of access, depending on the plan you choose.</p></details><details><summary>Do you provide trade tips or calls?<span>+</span></summary><p>No. We teach independent analysis and disciplined decision-making. The program is educational and does not provide investment advice.</p></details><details><summary>What if the course isn’t right for me?<span>+</span></summary><p>You can request a refund within 7 days of purchase, provided you have completed less than 20% of the course.</p></details></div></section>
 
@@ -147,6 +175,6 @@
   </section>
 
   <footer><div class="container footer-grid"><a class="brand brand-logo footer-brand" href="#top"><img class="brand-mark logo-image" src="tradeonix-logo.svg" alt="" /><span class="brand-word"><strong>TRADEONIX</strong><small>ACADEMY</small></span></a><p>Trading education for thoughtful, disciplined market participants.</p><div><b>EXPLORE</b><a href="#courses">Courses</a><a href="#method">Our Method</a><a href="#results">Student Stories</a></div><div><b>LEGAL</b><a href="terms.html">Terms & Conditions</a><a href="privacy.html">Privacy Policy</a><a href="risk-disclaimer.html">Risk Disclaimer</a></div></div><div class="container legal"><span>© 2026 TRADEONIX ACADEMY</span><span>Educational content only. Trading involves risk. Past performance does not guarantee future results.</span></div></footer>
-  <script src="script.js?v=15"></script>
+  <script src="script.js?v=16"></script>
 </body>
 </html>

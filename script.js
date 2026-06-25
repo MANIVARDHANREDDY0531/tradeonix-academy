@@ -306,7 +306,7 @@ document.querySelector('#newsRefresh')?.addEventListener('click', updateMarketNe
 updateMarketNews();
 setInterval(updateMarketNews, 600000);
 
-const revealItems = document.querySelectorAll('.section-heading, .course-card, .news-card, .step, .testimonial-grid blockquote, .faq details, .cta-inner > div');
+const revealItems = document.querySelectorAll('.section-heading, .course-card, .news-card, .step, .market-brand-strip, .market-focus-card, .lead-panel, .testimonial-grid blockquote, .faq details, .cta-inner > div');
 if ('IntersectionObserver' in window) {
   revealItems.forEach((item) => item.classList.add('reveal-ready'));
   const revealObserver = new IntersectionObserver((entries) => {
