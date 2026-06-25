@@ -135,11 +135,14 @@ function renderHeaderMarket(name, quote) {
     const price = item.querySelector('strong');
     const change = item.querySelector('em');
     price.textContent = formatMarketPrice(quote);
-    if (Number.isFinite(quote.change)) {
+    if (quote.lastPrice) {
+      change.textContent = 'LAST';
+      change.classList.remove('negative');
+    } else if (Number.isFinite(quote.change)) {
       change.textContent = `${quote.change >= 0 ? '+' : ''}${quote.change.toFixed(2)}%`;
       change.classList.toggle('negative', quote.change < 0);
     } else {
-      change.textContent = quote.lastPrice ? 'LAST' : 'LIVE';
+      change.textContent = 'LIVE';
       change.classList.remove('negative');
     }
   });
@@ -215,7 +218,7 @@ showMarket(0);
 updateAllMarkets();
 setInterval(updateAllMarkets, 30000);
 updateHeaderMarkets();
-setInterval(updateHeaderMarkets, 45000);
+setInterval(updateHeaderMarkets, 20000);
 
 function ensureMarketNewsSection() {
   const courses = document.querySelector('#courses');

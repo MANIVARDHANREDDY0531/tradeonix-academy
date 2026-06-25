@@ -59,10 +59,10 @@ const mimeTypes = {
 };
 
 const marketFeeds = {
-  nifty: { symbol: '^NSEI', decimals: 2, alwaysOpen: false },
-  banknifty: { symbol: '^NSEBANK', decimals: 2, alwaysOpen: false },
-  gold: { symbol: 'XAUUSD=X', decimals: 2, alwaysOpen: false },
-  bitcoin: { symbol: 'BTC-USD', decimals: 2, alwaysOpen: true }
+  nifty: { symbol: '^NSEI', yahooSymbols: ['^NSEI'], googleSymbol: 'NIFTY_50:INDEXNSE', decimals: 2, alwaysOpen: false, fallbackPrice: 25112.40, fallbackChange: 0.42 },
+  banknifty: { symbol: '^NSEBANK', yahooSymbols: ['^NSEBANK'], googleSymbol: 'NIFTY_BANK:INDEXNSE', decimals: 2, alwaysOpen: false, fallbackPrice: 56825.20, fallbackChange: 0.36 },
+  gold: { symbol: 'XAUUSD=X', yahooSymbols: ['XAUUSD=X', 'GC=F'], stooqSymbol: 'xauusd', decimals: 2, alwaysOpen: false, fallbackPrice: 4191.50, fallbackChange: 0.18 },
+  bitcoin: { symbol: 'BTC-USD', yahooSymbols: ['BTC-USD'], coingeckoId: 'bitcoin', decimals: 2, alwaysOpen: true, fallbackPrice: 104250.00, fallbackChange: -0.31 }
 };
 
 function sendJson(response, status, payload) {
@@ -340,8 +340,39 @@ async function fetchMarketData(market) {
   const cached = marketCache.get(market);
   if (cached && Date.now() - cached.createdAt < 45_000) return cached.payload;
 
-  const symbol = encodeURIComponent(feed.symbol);
-  const yahooPath = `/v8/finance/chart/${symbol}?interval=15m&range=5d`;
+  const attempts = [];
+  for (const symbol of feed.yahooSymbols || [feed.symbol]) {
+    attempts.push(() => fetchYahooChart(feed, symbol));
+  }
+  for (const symbol of feed.yahooSymbols || [feed.symbol]) {
+    attempts.push(() => fetchYahooQuote(feed, symbol));
+  }
+  if (feed.coingeckoId) attempts.push(() => fetchCoingeckoPrice(feed));
+  if (feed.stooqSymbol) attempts.push(() => fetchStooqPrice(feed));
+  if (feed.googleSymbol) attempts.push(() => fetchGoogleFinancePrice(feed));
+
+  for (const attempt of attempts) {
+    try {
+      const payload = await attempt();
+      marketCache.set(market, { createdAt: Date.now(), payload });
+      return payload;
+    } catch (error) {
+      // Try the next live source.
+    }
+  }
+
+  const fallback = buildMarketPayload(feed, feed.fallbackPrice, feed.fallbackChange, makeServerSparkline(feed.fallbackPrice, feed.fallbackChange), {
+    lastPrice: true,
+    marketState: 'FALLBACK',
+    source: 'Fallback'
+  });
+  marketCache.set(market, { createdAt: Date.now(), payload: fallback });
+  return fallback;
+}
+
+async function fetchYahooChart(feed, symbolValue) {
+  const symbol = encodeURIComponent(symbolValue);
+  const yahooPath = `/v8/finance/chart/${symbol}?interval=5m&range=1d`;
   const data = await getJson('query1.finance.yahoo.com', yahooPath);
   const result = data.chart?.result?.[0];
   if (!result) throw new Error('Market chart is unavailable');
@@ -355,17 +386,83 @@ async function fetchMarketData(market) {
 
   const change = Number.isFinite(previous) && previous ? ((price - previous) / previous) * 100 : null;
   const isClosed = !feed.alwaysOpen && meta.marketState && !['REGULAR', 'PRE', 'POST'].includes(meta.marketState);
-  const payload = {
-    price,
-    change,
-    prices: prices.length > 1 ? prices : makeServerSparkline(price, change),
-    decimals: feed.decimals,
+  return buildMarketPayload(feed, price, change, prices.length > 1 ? prices : makeServerSparkline(price, change), {
     lastPrice: Boolean(isClosed),
-    marketState: meta.marketState || 'UNKNOWN'
-  };
+    marketState: meta.marketState || 'UNKNOWN',
+    source: 'Yahoo'
+  });
+}
 
-  marketCache.set(market, { createdAt: Date.now(), payload });
-  return payload;
+async function fetchYahooQuote(feed, symbolValue) {
+  const symbol = encodeURIComponent(symbolValue);
+  const data = await getJson('query1.finance.yahoo.com', `/v7/finance/quote?symbols=${symbol}`);
+  const quote = data.quoteResponse?.result?.[0];
+  const price = Number(quote?.regularMarketPrice);
+  if (!Number.isFinite(price)) throw new Error('Yahoo quote unavailable');
+  const previous = Number(quote.regularMarketPreviousClose);
+  const change = Number.isFinite(quote.regularMarketChangePercent)
+    ? Number(quote.regularMarketChangePercent)
+    : Number.isFinite(previous) && previous ? ((price - previous) / previous) * 100 : null;
+  const marketState = quote.marketState || 'UNKNOWN';
+  const isClosed = !feed.alwaysOpen && marketState && !['REGULAR', 'PRE', 'POST'].includes(marketState);
+  return buildMarketPayload(feed, price, change, makeServerSparkline(price, change), {
+    lastPrice: Boolean(isClosed),
+    marketState,
+    source: 'Yahoo'
+  });
+}
+
+async function fetchCoingeckoPrice(feed) {
+  const data = await getJson('api.coingecko.com', `/api/v3/simple/price?ids=${feed.coingeckoId}&vs_currencies=usd&include_24hr_change=true`);
+  const quote = data[feed.coingeckoId];
+  const price = Number(quote?.usd);
+  if (!Number.isFinite(price)) throw new Error('CoinGecko quote unavailable');
+  const change = Number(quote.usd_24h_change);
+  return buildMarketPayload(feed, price, change, makeServerSparkline(price, change), {
+    marketState: 'REGULAR',
+    source: 'CoinGecko'
+  });
+}
+
+async function fetchStooqPrice(feed) {
+  const csv = await getText('stooq.com', `/q/l/?s=${encodeURIComponent(feed.stooqSymbol)}&f=sd2t2ohlcv&h&e=csv`);
+  const [, row = ''] = csv.trim().split(/\r?\n/);
+  const parts = row.split(',');
+  const close = Number(parts[6]);
+  const open = Number(parts[3]);
+  if (!Number.isFinite(close)) throw new Error('Stooq quote unavailable');
+  const change = Number.isFinite(open) && open ? ((close - open) / open) * 100 : null;
+  return buildMarketPayload(feed, close, change, makeServerSparkline(close, change), {
+    marketState: 'REGULAR',
+    source: 'Stooq'
+  });
+}
+
+async function fetchGoogleFinancePrice(feed) {
+  const html = await getText('www.google.com', `/finance/quote/${encodeURIComponent(feed.googleSymbol)}?hl=en`);
+  const priceMatch = html.match(/class="YMlKec fxKbKc">([^<]+)</);
+  if (!priceMatch) throw new Error('Google Finance quote unavailable');
+  const price = Number(priceMatch[1].replace(/[^0-9.-]/g, ''));
+  if (!Number.isFinite(price)) throw new Error('Google Finance price unavailable');
+  const percentMatch = html.match(/([-+]?\d+(?:\.\d+)?)%/);
+  const change = percentMatch ? Number(percentMatch[1]) : null;
+  return buildMarketPayload(feed, price, change, makeServerSparkline(price, change), {
+    lastPrice: true,
+    marketState: 'LAST',
+    source: 'Google Finance'
+  });
+}
+
+function buildMarketPayload(feed, price, change, prices, extra = {}) {
+  return {
+    price,
+    change: Number.isFinite(change) ? change : null,
+    prices: Array.isArray(prices) && prices.length > 1 ? prices : makeServerSparkline(price, change),
+    decimals: feed.decimals,
+    lastPrice: Boolean(extra.lastPrice),
+    marketState: extra.marketState || 'UNKNOWN',
+    source: extra.source || 'Market'
+  };
 }
 
 function makeServerSparkline(price, change = 0) {
