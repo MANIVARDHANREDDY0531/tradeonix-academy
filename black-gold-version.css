@@ -386,23 +386,51 @@ details p {
   box-shadow: inset 0 1px 0 rgba(255, 231, 160, .12), 0 10px 26px rgba(0, 0, 0, .18);
 }
 
-.market-brand-strip b,
-.market-card-visual b,
-.lead-logo-row b {
+.market-logo {
+  flex: 0 0 auto;
   display: grid;
   place-items: center;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ffe7a0, #f7c85b);
-  color: #070a08;
-  font-weight: 950;
-  letter-spacing: -.03em;
-  box-shadow: 0 0 0 1px rgba(255, 231, 160, .45), 0 10px 26px rgba(247, 200, 91, .18);
-}
-
-.market-brand-strip b {
   width: 42px;
   height: 42px;
-  font-size: 13px;
+  border: 1px solid rgba(255, 231, 160, .5);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ffe7a0, #f7c85b);
+  box-shadow: 0 0 0 1px rgba(255, 231, 160, .25), 0 10px 26px rgba(247, 200, 91, .18);
+}
+
+.market-logo svg {
+  width: 26px;
+  height: 26px;
+}
+
+.market-logo path {
+  fill: none;
+  stroke: #070a08;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.logo-bank path:first-child,
+.logo-gold path,
+.logo-btc path {
+  fill: rgba(7, 10, 8, .08);
+}
+
+.logo-btc {
+  background: linear-gradient(135deg, #ffe2a6, #f7931a);
+}
+
+.logo-bank {
+  background: linear-gradient(135deg, #e6f4ff, #72c3ff);
+}
+
+.logo-gold {
+  background: linear-gradient(135deg, #fff0ad, #d49b22);
+}
+
+.logo-forex {
+  background: linear-gradient(135deg, #d8ffc2, #7fe044);
 }
 
 .market-brand-strip small {
@@ -462,14 +490,24 @@ details p {
   background-size: 100% 34px, 52px 100%, auto, auto;
 }
 
-.market-card-visual b {
+.market-card-visual .market-logo {
   position: absolute;
   top: 14px;
   left: 14px;
   z-index: 2;
   width: 58px;
   height: 58px;
-  font-size: 15px;
+}
+
+.market-card-visual .market-logo svg {
+  width: 34px;
+  height: 34px;
+}
+
+.market-card-visual .card-logo-secondary {
+  left: 78px;
+  transform: scale(.82);
+  opacity: .9;
 }
 
 .market-card-visual svg {
@@ -944,10 +982,24 @@ details {
   margin-top: 16px;
 }
 
-.lead-logo-row b {
+.lead-logo-row .market-logo {
   width: 52px;
   height: 52px;
-  font-size: 13px;
+}
+
+.lead-logo-row .market-logo svg {
+  width: 31px;
+  height: 31px;
+}
+
+.header-market-item .market-logo {
+  width: 30px;
+  height: 30px;
+}
+
+.header-market-item .market-logo svg {
+  width: 19px;
+  height: 19px;
 }
 
 .lead-copy h2 {
