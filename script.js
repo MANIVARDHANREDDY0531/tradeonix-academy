@@ -328,6 +328,27 @@ const purchaseRequestEndpoint = window.location.protocol === 'file:'
   ? 'http://127.0.0.1:8768/api/purchase-requests'
   : '/api/purchase-requests';
 
+function gtag_report_conversion(url) {
+  const callback = function () {
+    if (typeof url !== 'undefined') {
+      window.location = url;
+    }
+  };
+
+  if (typeof gtag === 'function') {
+    gtag('event', 'conversion', {
+      send_to: 'AW-18276071867/RN98CNn0qsYcELvz2opE',
+      value: 1.0,
+      currency: 'INR',
+      event_callback: callback
+    });
+    return false;
+  }
+
+  callback();
+  return false;
+}
+
 function formatPlanPrice(price) {
   const amount = Number(price);
   if (!amount) return 'Our team will help you choose the right plan.';
@@ -384,6 +405,7 @@ checkoutForm?.addEventListener('submit', async (event) => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Unable to submit request');
     checkoutStatus.textContent = `Request received. Reference: ${result.referenceId}`;
+    gtag_report_conversion();
     checkoutForm.reset();
   } catch (error) {
     checkoutStatus.textContent = error.message || 'Please try again in a moment.';

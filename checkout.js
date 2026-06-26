@@ -55,6 +55,27 @@ const finalPrice = document.querySelector('#finalPrice');
 let appliedCoupon = null;
 let currentPayableAmount = plan.price * 100;
 
+function gtag_report_conversion(url) {
+  const callback = function () {
+    if (typeof url !== 'undefined') {
+      window.location = url;
+    }
+  };
+
+  if (typeof gtag === 'function') {
+    gtag('event', 'conversion', {
+      send_to: 'AW-18276071867/RN98CNn0qsYcELvz2opE',
+      value: 1.0,
+      currency: 'INR',
+      event_callback: callback
+    });
+    return false;
+  }
+
+  callback();
+  return false;
+}
+
 function formatAmount(amount) {
   if (!Number(amount)) return 'Free consultation';
   return `Rs. ${Number(amount).toLocaleString('en-IN')}`;
@@ -151,6 +172,7 @@ form.addEventListener('submit', async (event) => {
       if (!freeResponse.ok) throw new Error(freeResult.error || 'Unable to submit request.');
       successText.textContent = `Reference ${freeResult.referenceId}. The team will contact you shortly.`;
       successView.setAttribute('aria-hidden', 'false');
+      gtag_report_conversion();
       form.reset();
       return;
     }
@@ -219,6 +241,7 @@ form.addEventListener('submit', async (event) => {
           if (!verifyResponse.ok) throw new Error(verifyResult.error || 'Payment verification failed.');
           successText.textContent = `Payment successful. Reference ${result.referenceId}. Paid ${formatPaise(result.payableAmount || result.amount)}.`;
           successView.setAttribute('aria-hidden', 'false');
+          gtag_report_conversion();
           form.reset();
           resetCouponView();
           planPrice.textContent = formatAmount(plan.price);
