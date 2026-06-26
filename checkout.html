@@ -1,6 +1,15 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18276071867"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'AW-18276071867');
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TRADEONIX Checkout</title>
@@ -44,7 +53,7 @@
           <label class="coupon-field"><span>Coupon code</span><div><input type="text" name="couponCode" id="couponCode" autocomplete="off" placeholder="Enter coupon if you have one" /><button id="applyCoupon" type="button">Apply</button></div></label>
           <p class="coupon-message" id="couponMessage"></p>
           <label><span>Message</span><textarea name="message" rows="3" placeholder="Preferred batch timing or questions"></textarea></label>
-          <button type="submit">Pay with Razorpay <span>→</span></button>
+          <button type="submit">Pay with Razorpay <span>â†’</span></button>
           <p class="status" id="checkoutPageStatus" role="status"></p>
         </form>
       </article>
@@ -53,7 +62,7 @@
 
   <section class="success-view" id="successView" aria-hidden="true">
     <div>
-      <span class="success-mark">✓</span>
+      <span class="success-mark">âœ“</span>
       <h2>Enrollment request received</h2>
       <p id="successText"></p>
       <div class="success-actions">
@@ -66,3 +75,5 @@
   <script src="checkout.js?v=2"></script>
 </body>
 </html>
+
+
