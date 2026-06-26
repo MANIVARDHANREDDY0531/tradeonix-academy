@@ -43,16 +43,6 @@ document.querySelectorAll('.enroll-box[href]').forEach((link) => {
   });
 });
 
-document.querySelectorAll('.course-card').forEach((card) => {
-  const enrollLink = card.querySelector('.enroll-box[href]');
-  if (!enrollLink) return;
-  card.addEventListener('click', (event) => {
-    if (event.target.closest('a, button, input, textarea, select')) return;
-    const targetUrl = enrollLink.getAttribute('href');
-    if (targetUrl) window.location.assign(targetUrl);
-  });
-});
-
 document.querySelectorAll('details').forEach((item) => {
   item.addEventListener('toggle', () => {
     if (!item.open) return;

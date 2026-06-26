@@ -1805,7 +1805,7 @@ body {
   overflow-anchor: none;
   scroll-snap-align: none;
   scroll-snap-stop: normal;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
 }
 
 #courses,
@@ -1830,6 +1830,7 @@ body {
   .course-card {
     min-height: auto;
     transform: none;
+    touch-action: pan-y;
   }
 
   .enroll-box {
@@ -2074,8 +2075,7 @@ body {
 }
 
 .course-card {
-  cursor: pointer;
-  touch-action: manipulation;
+  touch-action: pan-y;
 }
 
 .course-card > * {
