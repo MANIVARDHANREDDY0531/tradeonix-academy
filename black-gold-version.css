@@ -768,6 +768,7 @@ details {
   box-shadow:
     0 12px 28px rgba(247, 200, 91, .24),
     inset 0 1px 0 rgba(255, 255, 255, .5);
+  touch-action: manipulation;
 }
 
 .enroll-box::after {
@@ -777,6 +778,7 @@ details {
   background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .52) 50%, transparent 58%);
   transform: translateX(-60%);
   transition: transform .5s ease;
+  pointer-events: none;
 }
 
 .enroll-box span,
@@ -1057,6 +1059,7 @@ details[open] {
 }
 
 footer {
+  margin-top: 0 !important;
   background:
     radial-gradient(circle at 12% 0%, rgba(247, 200, 91, .1), transparent 30%),
     #050705;
@@ -1230,7 +1233,7 @@ footer {
 }
 
 .checkout-drawer {
-  position: fixed;
+  position: fixed !important;
   inset: 0;
   z-index: 1000;
   display: grid;
@@ -2068,6 +2071,31 @@ body {
 .masterclass-card .offer-price,
 .masterclass-card .save-badge {
   animation: none !important;
+}
+
+.course-card {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.course-card > * {
+  position: relative;
+  z-index: 2;
+}
+
+.course-card::before,
+.course-card::after,
+.value-card::before,
+.value-card::after,
+.masterclass-card::before,
+.masterclass-card::after {
+  pointer-events: none !important;
+}
+
+.card-bottom,
+.enroll-box {
+  position: relative;
+  z-index: 5;
 }
 
 .masterclass-card::after,
