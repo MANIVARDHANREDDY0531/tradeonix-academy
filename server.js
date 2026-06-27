@@ -1138,10 +1138,6 @@ const server = http.createServer((request, response) => {
     response.end();
     return;
   }
-  if (isAdminRequest(request) && !isAdminAuthorized(request)) {
-    requestAdminLogin(response);
-    return;
-  }
   if (request.method === 'GET' && request.url === '/api/purchase-requests') {
     sendJson(response, 200, {
       requests: readPurchaseRequests()

@@ -9,14 +9,11 @@ const adminLoginPanel = document.querySelector('#adminLoginPanel');
 const adminLoginForm = document.querySelector('#adminLoginForm');
 const adminContent = document.querySelector('#adminContent');
 const loginStatus = document.querySelector('#loginStatus');
-const authStorageKey = 'tradeonixAdminAuth';
-
-let adminAuthToken = sessionStorage.getItem(authStorageKey) || '';
+let adminAuthToken = '';
 
 function showLogin(message = '') {
   adminAuthToken = '';
-  sessionStorage.removeItem(authStorageKey);
-  adminLoginPanel.hidden = false;
+  adminLoginPanel.hidden = true;
   adminContent.hidden = true;
   loginStatus.textContent = message;
 }
@@ -28,8 +25,7 @@ function showAdmin() {
 
 function getAdminHeaders(extraHeaders = {}) {
   return {
-    ...extraHeaders,
-    Authorization: `Basic ${adminAuthToken}`
+    ...extraHeaders
   };
 }
 
@@ -113,11 +109,6 @@ function renderRequests(requests) {
 }
 
 async function loadRequests() {
-  if (!adminAuthToken) {
-    showLogin('Please log in to continue.');
-    return;
-  }
-
   showAdmin();
   statusText.textContent = 'Loading requests...';
   refreshButton.disabled = true;
@@ -141,25 +132,10 @@ async function loadRequests() {
 }
 
 refreshButton.addEventListener('click', loadRequests);
-logoutButton.addEventListener('click', () => showLogin('Logged out.'));
+logoutButton.hidden = true;
 adminLoginForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const submitButton = adminLoginForm.querySelector('button[type="submit"]');
-  const formData = new FormData(adminLoginForm);
-  const username = String(formData.get('username') || '').trim();
-  const password = String(formData.get('password') || '');
-
-  if (!username || !password) {
-    loginStatus.textContent = 'Enter both admin ID and password.';
-    return;
-  }
-
-  adminAuthToken = btoa(`${username}:${password}`);
-  sessionStorage.setItem(authStorageKey, adminAuthToken);
-  loginStatus.textContent = 'Checking login...';
-  submitButton.disabled = true;
   await loadRequests();
-  submitButton.disabled = false;
 });
 requestRows.addEventListener('click', async (event) => {
   const button = event.target.closest('.delete-request');
