@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="account.css?v=1" />
+  <link rel="stylesheet" href="account.css?v=2" />
 </head>
 <body>
   <main class="account-shell">
@@ -38,7 +38,10 @@
         <label id="nameField">Full name<input name="name" autocomplete="name" /></label>
         <label>Email<input name="email" type="email" autocomplete="email" required /></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" minlength="8" required /></label>
+        <label id="otpField" class="hidden">Email OTP<input name="otp" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="6 digit code" /></label>
         <button class="primary-action" type="submit">Continue to journal <span>&rarr;</span></button>
+        <button class="link-action" id="forgotPasswordButton" type="button">Forgot password?</button>
+        <button class="link-action hidden" id="backToLoginButton" type="button">Back to login</button>
         <p class="form-status" id="authStatus"></p>
       </form>
     </section>
@@ -78,6 +81,6 @@
       <div class="entries-list" id="entriesList"></div>
     </section>
   </main>
-  <script src="account.js?v=1"></script>
+  <script src="account.js?v=2"></script>
 </body>
 </html>

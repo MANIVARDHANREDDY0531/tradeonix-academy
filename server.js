@@ -7,6 +7,10 @@ const crypto = require('crypto');
 const root = __dirname;
 const dataDir = path.join(root, 'data');
 const requestLog = path.join(dataDir, 'purchase-requests.jsonl');
+const usersPath = path.join(dataDir, 'users.json');
+const sessionsPath = path.join(dataDir, 'sessions.json');
+const journalsPath = path.join(dataDir, 'journal-entries.json');
+const otpStorePath = path.join(dataDir, 'auth-otps.json');
 const couponsPath = path.join(root, 'coupons.json');
 const port = Number(process.env.PORT || 8766);
 
@@ -26,6 +30,7 @@ const whatsappCloudToken = process.env.WHATSAPP_CLOUD_TOKEN || '';
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const adminUsername = process.env.ADMIN_USERNAME || '';
 const adminPassword = process.env.ADMIN_PASSWORD || '';
+const otpSecret = process.env.OTP_SECRET || razorpayKeySecret || process.env.SESSION_SECRET || 'tradeonix-local-otp-secret';
 
 const plans = {
   'beginner-3-month': {
@@ -64,7 +69,7 @@ const marketFeeds = {
   nifty: { symbol: '^NSEI', yahooSymbols: ['^NSEI'], googleSymbol: 'NIFTY_50:INDEXNSE', decimals: 2, alwaysOpen: false, fallbackPrice: 25112.40, fallbackChange: 0.42 },
   banknifty: { symbol: '^NSEBANK', yahooSymbols: ['^NSEBANK'], googleSymbol: 'NIFTY_BANK:INDEXNSE', decimals: 2, alwaysOpen: false, fallbackPrice: 56825.20, fallbackChange: 0.36 },
   gold: { symbol: 'XAUUSD=X', yahooSymbols: ['XAUUSD=X', 'GC=F'], stooqSymbol: 'xauusd', decimals: 2, alwaysOpen: false, fallbackPrice: 4191.50, fallbackChange: 0.18 },
-  bitcoin: { symbol: 'BTC-USD', yahooSymbols: ['BTC-USD'], coingeckoId: 'bitcoin', decimals: 2, alwaysOpen: true, fallbackPrice: 104250.00, fallbackChange: -0.31 }
+  bitcoin: { symbol: 'BTC-USD', yahooSymbols: ['BTC-USD'], binanceSymbol: 'BTCUSDT', coingeckoId: 'bitcoin', decimals: 2, alwaysOpen: true, fallbackPrice: 104250.00, fallbackChange: -0.31 }
 };
 
 function sendJson(response, status, payload) {
@@ -240,7 +245,7 @@ function normalizeWhatsappNumber(value) {
 }
 
 async function sendEmail(to, subject, text) {
-  if (!resendApiKey || !notificationFromEmail || !to) return;
+  if (!resendApiKey || !notificationFromEmail || !to) return false;
   await postJson('api.resend.com', '/emails', {
     Authorization: `Bearer ${resendApiKey}`
   }, {
@@ -249,6 +254,7 @@ async function sendEmail(to, subject, text) {
     subject,
     text
   });
+  return true;
 }
 
 async function sendWhatsappText(to, text) {
@@ -343,6 +349,7 @@ async function fetchMarketData(market) {
   if (cached && Date.now() - cached.createdAt < 45_000) return cached.payload;
 
   const attempts = [];
+  if (feed.binanceSymbol) attempts.push(() => fetchBinanceTicker(feed));
   for (const symbol of feed.yahooSymbols || [feed.symbol]) {
     attempts.push(() => fetchYahooChart(feed, symbol));
   }
@@ -353,20 +360,19 @@ async function fetchMarketData(market) {
   if (feed.stooqSymbol) attempts.push(() => fetchStooqPrice(feed));
   if (feed.googleSymbol) attempts.push(() => fetchGoogleFinancePrice(feed));
 
-  for (const attempt of attempts) {
-    try {
-      const payload = await attempt();
-      marketCache.set(market, { createdAt: Date.now(), payload });
-      return payload;
-    } catch (error) {
-      // Try the next live source.
-    }
+  try {
+    const payload = await Promise.any(attempts.map((attempt) => attempt()));
+    marketCache.set(market, { createdAt: Date.now(), payload });
+    return payload;
+  } catch (error) {
+    // Fall back only after every live source fails.
   }
 
   const fallback = buildMarketPayload(feed, feed.fallbackPrice, feed.fallbackChange, makeServerSparkline(feed.fallbackPrice, feed.fallbackChange), {
     lastPrice: true,
     marketState: 'FALLBACK',
-    source: 'Fallback'
+    source: 'Fallback',
+    stale: true
   });
   marketCache.set(market, { createdAt: Date.now(), payload: fallback });
   return fallback;
@@ -426,6 +432,17 @@ async function fetchCoingeckoPrice(feed) {
   });
 }
 
+async function fetchBinanceTicker(feed) {
+  const data = await getJson('api.binance.com', `/api/v3/ticker/24hr?symbol=${encodeURIComponent(feed.binanceSymbol)}`);
+  const price = Number(data.lastPrice);
+  if (!Number.isFinite(price)) throw new Error('Binance quote unavailable');
+  const change = Number(data.priceChangePercent);
+  return buildMarketPayload(feed, price, change, makeServerSparkline(price, change), {
+    marketState: 'REGULAR',
+    source: 'Binance'
+  });
+}
+
 async function fetchStooqPrice(feed) {
   const csv = await getText('stooq.com', `/q/l/?s=${encodeURIComponent(feed.stooqSymbol)}&f=sd2t2ohlcv&h&e=csv`);
   const [, row = ''] = csv.trim().split(/\r?\n/);
@@ -463,7 +480,8 @@ function buildMarketPayload(feed, price, change, prices, extra = {}) {
     decimals: feed.decimals,
     lastPrice: Boolean(extra.lastPrice),
     marketState: extra.marketState || 'UNKNOWN',
-    source: extra.source || 'Market'
+    source: extra.source || 'Market',
+    stale: Boolean(extra.stale)
   };
 }
 
@@ -761,6 +779,363 @@ function writePurchaseRequests(requests) {
   fs.mkdirSync(dataDir, { recursive: true });
   const lines = requests.map((item) => JSON.stringify(item)).join('\n');
   fs.writeFileSync(requestLog, lines ? `${lines}\n` : '', 'utf8');
+}
+
+function readJsonStore(filePath, fallback = []) {
+  if (!fs.existsSync(filePath)) return fallback;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writeJsonStore(filePath, records) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(records, null, 2), 'utf8');
+}
+
+function publicUser(user) {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt
+  };
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  const hash = crypto.pbkdf2Sync(String(password), salt, 120000, 32, 'sha256').toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedHash) {
+  const [salt, expected] = String(storedHash || '').split(':');
+  if (!salt || !expected) return false;
+  const actual = crypto.pbkdf2Sync(String(password), salt, 120000, 32, 'sha256').toString('hex');
+  return safeCompare(actual, expected);
+}
+
+function createSession(userId) {
+  const sessions = readJsonStore(sessionsPath);
+  const token = crypto.randomBytes(32).toString('hex');
+  const now = new Date().toISOString();
+  sessions.push({ token, userId, createdAt: now, lastSeenAt: now });
+  writeJsonStore(sessionsPath, sessions.slice(-1000));
+  return token;
+}
+
+function getBearerToken(request) {
+  const header = request.headers.authorization || '';
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+function getSessionUser(request) {
+  const token = getBearerToken(request);
+  if (!token) return null;
+  const sessions = readJsonStore(sessionsPath);
+  const session = sessions.find((item) => safeCompare(item.token, token));
+  if (!session) return null;
+  const user = readJsonStore(usersPath).find((item) => item.id === session.userId);
+  return user ? { user, token } : null;
+}
+
+function removeSession(token) {
+  const sessions = readJsonStore(sessionsPath);
+  writeJsonStore(sessionsPath, sessions.filter((item) => item.token !== token));
+}
+
+function removeSessionsForUser(userId) {
+  const sessions = readJsonStore(sessionsPath);
+  writeJsonStore(sessionsPath, sessions.filter((item) => item.userId !== userId));
+}
+
+function canSendOtpEmail() {
+  return Boolean(resendApiKey && notificationFromEmail);
+}
+
+function generateOtp() {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtp(email, purpose, otp) {
+  return crypto
+    .createHmac('sha256', otpSecret)
+    .update(`${clean(email).toLowerCase()}|${clean(purpose)}|${clean(otp)}`)
+    .digest('hex');
+}
+
+function readOtpRecords() {
+  const now = Date.now();
+  return readJsonStore(otpStorePath).filter((item) => Date.parse(item.expiresAt || '') > now && Number(item.attempts || 0) < 5);
+}
+
+function writeOtpRecords(records) {
+  writeJsonStore(otpStorePath, records.slice(-500));
+}
+
+function saveOtpRecord(record) {
+  const records = readOtpRecords().filter((item) => !(item.email === record.email && item.purpose === record.purpose));
+  records.push(record);
+  writeOtpRecords(records);
+}
+
+function findOtpRecord(email, purpose) {
+  return readOtpRecords().find((item) => item.email === clean(email).toLowerCase() && item.purpose === purpose);
+}
+
+function consumeOtp(email, purpose, otp) {
+  const records = readOtpRecords();
+  const index = records.findIndex((item) => item.email === clean(email).toLowerCase() && item.purpose === purpose);
+  if (index < 0) return { ok: false, reason: 'missing' };
+  const record = records[index];
+  if (Date.parse(record.expiresAt || '') <= Date.now()) return { ok: false, reason: 'expired' };
+  if (!safeCompare(record.otpHash, hashOtp(record.email, purpose, otp))) {
+    record.attempts = Number(record.attempts || 0) + 1;
+    records[index] = record;
+    writeOtpRecords(records);
+    return { ok: false, reason: 'invalid' };
+  }
+  records.splice(index, 1);
+  writeOtpRecords(records);
+  return { ok: true, record };
+}
+
+function buildOtpMessage(name, otp, purpose) {
+  const action = purpose === 'signup' ? 'create your TRADEONIX Journal account' : 'reset your TRADEONIX Journal password';
+  return [
+    `Hi ${name || 'there'},`,
+    '',
+    `Your TRADEONIX verification code is: ${otp}`,
+    '',
+    `Use this code to ${action}.`,
+    'This code expires in 10 minutes. Do not share it with anyone.',
+    '',
+    'TRADEONIX ACADEMY'
+  ].join('\n');
+}
+
+async function handleRequestSignupOtp(request, response) {
+  try {
+    if (!canSendOtpEmail()) return sendJson(response, 500, { error: 'Email OTP is not configured yet. Please add RESEND_API_KEY and NOTIFICATION_FROM_EMAIL in Railway variables.' });
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const name = clean(body.name);
+    const email = clean(body.email).toLowerCase();
+    const password = String(body.password || '');
+    if (name.length < 2) return sendJson(response, 400, { error: 'Please enter your full name.' });
+    if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
+    if (password.length < 8) return sendJson(response, 400, { error: 'Password must be at least 8 characters.' });
+
+    const users = readJsonStore(usersPath);
+    if (users.some((user) => user.email === email)) return sendJson(response, 409, { error: 'An account already exists with this email. Please login or reset password.' });
+
+    const existing = findOtpRecord(email, 'signup');
+    if (existing && Date.parse(existing.nextAllowedAt || '') > Date.now()) {
+      return sendJson(response, 429, { error: 'Please wait one minute before requesting another OTP.' });
+    }
+
+    const otp = generateOtp();
+    saveOtpRecord({
+      id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      purpose: 'signup',
+      name,
+      email,
+      passwordHash: hashPassword(password),
+      otpHash: hashOtp(email, 'signup', otp),
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
+    });
+
+    await sendEmail(email, 'Your TRADEONIX account OTP', buildOtpMessage(name, otp, 'signup'));
+    sendJson(response, 200, { ok: true, message: 'OTP sent to your email. Please verify to create account.' });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not send OTP. Please try again.' });
+  }
+}
+
+async function handleVerifySignupOtp(request, response) {
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const email = clean(body.email).toLowerCase();
+    const otp = clean(body.otp);
+    if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
+    if (!/^\d{6}$/.test(otp)) return sendJson(response, 400, { error: 'Please enter the 6 digit OTP.' });
+
+    const result = consumeOtp(email, 'signup', otp);
+    if (!result.ok) return sendJson(response, 400, { error: 'OTP is incorrect or expired.' });
+
+    const users = readJsonStore(usersPath);
+    if (users.some((user) => user.email === email)) return sendJson(response, 409, { error: 'An account already exists with this email.' });
+    const user = {
+      id: `USR-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      name: result.record.name,
+      email,
+      passwordHash: result.record.passwordHash,
+      createdAt: new Date().toISOString()
+    };
+    users.push(user);
+    writeJsonStore(usersPath, users);
+    const token = createSession(user.id);
+    sendJson(response, 201, { ok: true, token, user: publicUser(user) });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not verify OTP.' });
+  }
+}
+
+async function handleRequestPasswordReset(request, response) {
+  try {
+    if (!canSendOtpEmail()) return sendJson(response, 500, { error: 'Email OTP is not configured yet. Please add RESEND_API_KEY and NOTIFICATION_FROM_EMAIL in Railway variables.' });
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const email = clean(body.email).toLowerCase();
+    if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
+
+    const user = readJsonStore(usersPath).find((item) => item.email === email);
+    const existing = findOtpRecord(email, 'reset');
+    if (existing && Date.parse(existing.nextAllowedAt || '') > Date.now()) {
+      return sendJson(response, 429, { error: 'Please wait one minute before requesting another OTP.' });
+    }
+
+    if (user) {
+      const otp = generateOtp();
+      saveOtpRecord({
+        id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+        purpose: 'reset',
+        name: user.name,
+        email,
+        otpHash: hashOtp(email, 'reset', otp),
+        attempts: 0,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+        nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
+      });
+      await sendEmail(email, 'Your TRADEONIX password reset OTP', buildOtpMessage(user.name, otp, 'reset'));
+    }
+
+    sendJson(response, 200, { ok: true, message: 'If this email exists, a reset OTP has been sent.' });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not send reset OTP. Please try again.' });
+  }
+}
+
+async function handleResetPassword(request, response) {
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const email = clean(body.email).toLowerCase();
+    const otp = clean(body.otp);
+    const password = String(body.password || '');
+    if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
+    if (!/^\d{6}$/.test(otp)) return sendJson(response, 400, { error: 'Please enter the 6 digit OTP.' });
+    if (password.length < 8) return sendJson(response, 400, { error: 'Password must be at least 8 characters.' });
+
+    const result = consumeOtp(email, 'reset', otp);
+    if (!result.ok) return sendJson(response, 400, { error: 'OTP is incorrect or expired.' });
+
+    const users = readJsonStore(usersPath);
+    const userIndex = users.findIndex((item) => item.email === email);
+    if (userIndex < 0) return sendJson(response, 404, { error: 'Account not found.' });
+    users[userIndex].passwordHash = hashPassword(password);
+    users[userIndex].passwordUpdatedAt = new Date().toISOString();
+    writeJsonStore(usersPath, users);
+    removeSessionsForUser(users[userIndex].id);
+    sendJson(response, 200, { ok: true, message: 'Password updated. Please login.' });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not reset password.' });
+  }
+}
+
+async function handleSignup(request, response) {
+  sendJson(response, 410, { error: 'Signup now requires email OTP. Please request OTP first.' });
+}
+
+async function handleLogin(request, response) {
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const email = clean(body.email).toLowerCase();
+    const password = String(body.password || '');
+    const user = readJsonStore(usersPath).find((item) => item.email === email);
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return sendJson(response, 401, { error: 'Email or password is incorrect.' });
+    }
+    const token = createSession(user.id);
+    sendJson(response, 200, { ok: true, token, user: publicUser(user) });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not sign in.' });
+  }
+}
+
+function handleMe(request, response) {
+  const session = getSessionUser(request);
+  if (!session) return sendJson(response, 401, { error: 'Please sign in again.' });
+  sendJson(response, 200, { user: publicUser(session.user) });
+}
+
+function handleLogout(request, response) {
+  const token = getBearerToken(request);
+  if (token) removeSession(token);
+  sendJson(response, 200, { ok: true });
+}
+
+function handleJournalList(request, response) {
+  const session = getSessionUser(request);
+  if (!session) return sendJson(response, 401, { error: 'Please sign in to view your journal.' });
+  const entries = readJsonStore(journalsPath)
+    .filter((entry) => entry.userId === session.user.id)
+    .sort((a, b) => String(b.tradeDate || b.createdAt).localeCompare(String(a.tradeDate || a.createdAt)));
+  sendJson(response, 200, { entries });
+}
+
+async function handleJournalCreate(request, response) {
+  const session = getSessionUser(request);
+  if (!session) return sendJson(response, 401, { error: 'Please sign in to add a journal entry.' });
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const tradeDate = clean(body.tradeDate);
+    const market = clean(body.market);
+    const direction = clean(body.direction);
+    const setup = clean(body.setup);
+    const result = Number(body.result || 0);
+    const riskReward = clean(body.riskReward);
+    const emotion = clean(body.emotion);
+    const notes = clean(body.notes);
+    if (!tradeDate) return sendJson(response, 400, { error: 'Please select a trade date.' });
+    if (!market) return sendJson(response, 400, { error: 'Please select a market.' });
+    if (!direction) return sendJson(response, 400, { error: 'Please select trade direction.' });
+
+    const entries = readJsonStore(journalsPath);
+    const entry = {
+      id: `JRN-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      userId: session.user.id,
+      tradeDate,
+      market,
+      direction,
+      setup,
+      result: Number.isFinite(result) ? result : 0,
+      riskReward,
+      emotion,
+      notes,
+      createdAt: new Date().toISOString()
+    };
+    entries.push(entry);
+    writeJsonStore(journalsPath, entries);
+    sendJson(response, 201, { ok: true, entry });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not save this journal entry.' });
+  }
+}
+
+function handleJournalDelete(request, response) {
+  const session = getSessionUser(request);
+  if (!session) return sendJson(response, 401, { error: 'Please sign in to update your journal.' });
+  const entryId = decodeURIComponent(request.url.split('/').pop() || '');
+  const entries = readJsonStore(journalsPath);
+  const nextEntries = entries.filter((entry) => !(entry.id === entryId && entry.userId === session.user.id));
+  if (nextEntries.length === entries.length) return sendJson(response, 404, { error: 'Journal entry not found.' });
+  writeJsonStore(journalsPath, nextEntries);
+  sendJson(response, 200, { ok: true });
 }
 
 function deletePurchaseRequest(referenceId) {
@@ -1150,6 +1525,50 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url.startsWith('/api/market-news')) {
     handleMarketNews(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/signup') {
+    handleSignup(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/auth/request-signup-otp') {
+    handleRequestSignupOtp(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/auth/verify-signup-otp') {
+    handleVerifySignupOtp(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/auth/request-password-reset') {
+    handleRequestPasswordReset(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/auth/reset-password') {
+    handleResetPassword(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/login') {
+    handleLogin(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/api/me') {
+    handleMe(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/logout') {
+    handleLogout(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/api/journal') {
+    handleJournalList(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/journal') {
+    handleJournalCreate(request, response);
+    return;
+  }
+  if (request.method === 'DELETE' && request.url.startsWith('/api/journal/')) {
+    handleJournalDelete(request, response);
     return;
   }
   if (request.method === 'GET' && request.url.startsWith('/api/validate-coupon')) {
