@@ -878,7 +878,7 @@ async function handlePurchaseRequest(request, response) {
 
     if (!plan) return sendJson(response, 400, { error: 'Please choose a valid plan.' });
     if (name.length < 2) return sendJson(response, 400, { error: 'Please enter your full name.' });
-    if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
+    if (email && !isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
     if (!isValidPhone(phone)) return sendJson(response, 400, { error: 'Please enter a valid phone number.' });
 
     fs.mkdirSync(dataDir, { recursive: true });

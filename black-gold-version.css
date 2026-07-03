@@ -1333,6 +1333,50 @@ footer {
   font-weight: 800;
 }
 
+.checkout-form label small {
+  color: rgba(255, 231, 160, .66);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.quick-lead-bar {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 900;
+  display: flex;
+  gap: 10px;
+  padding: 9px;
+  border: 1px solid rgba(247, 200, 91, .34);
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, rgba(255, 231, 160, .12), rgba(255, 255, 255, .04)),
+    rgba(7, 10, 8, .9);
+  box-shadow: 0 20px 55px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 231, 160, .16);
+  backdrop-filter: blur(14px);
+}
+
+.quick-lead-bar a,
+.quick-lead-bar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 18px;
+  color: #080b09;
+  background: linear-gradient(135deg, #ffe7a0, #f7c85b);
+  font: 950 13px var(--font-display);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.quick-lead-bar a {
+  color: #08140d;
+  background: linear-gradient(135deg, #92ffb8, #32d76d);
+}
+
 @media (max-width: 620px) {
   .checkout-panel {
     padding: 28px 20px;
@@ -1548,6 +1592,42 @@ footer {
 
 .hero-copy > p {
   max-width: 650px;
+}
+
+.lead-mini-card {
+  display: grid;
+  gap: 4px;
+  max-width: 620px;
+  margin-top: 22px;
+  border: 1px solid rgba(247, 200, 91, .24);
+  border-radius: 8px;
+  padding: 15px 17px;
+  background:
+    linear-gradient(135deg, rgba(255, 231, 160, .11), rgba(255, 255, 255, .035)),
+    rgba(7, 10, 8, .62);
+  box-shadow: inset 0 1px 0 rgba(255, 231, 160, .14), 0 16px 36px rgba(0, 0, 0, .2);
+}
+
+.lead-mini-card b {
+  color: #fff5df;
+  font: 900 14px/1.2 var(--font-display);
+}
+
+.lead-mini-card span {
+  color: var(--lux-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.whatsapp-link .play {
+  width: 38px;
+  height: 38px;
+  border-color: rgba(82, 255, 145, .42);
+  background: rgba(82, 255, 145, .13);
+  color: #92ffb8;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .04em;
 }
 
 .hero-proof {

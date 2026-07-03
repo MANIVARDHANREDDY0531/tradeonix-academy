@@ -92,6 +92,12 @@ a {
   color: var(--seo-gold-soft);
 }
 
+.seo-button.whatsapp {
+  border-color: rgba(82, 255, 145, .42);
+  background: linear-gradient(135deg, #92ffb8, #32d76d);
+  color: #08140d;
+}
+
 .seo-hero {
   padding: 86px 0 54px;
 }
@@ -124,6 +130,29 @@ a {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.seo-lead-note {
+  display: grid;
+  gap: 4px;
+  max-width: 660px;
+  margin-top: 20px;
+  border: 1px solid rgba(247, 200, 91, .24);
+  border-radius: 10px;
+  padding: 15px 17px;
+  background:
+    linear-gradient(135deg, rgba(255, 231, 160, .11), rgba(255, 255, 255, .035)),
+    rgba(7, 10, 8, .62);
+}
+
+.seo-lead-note strong {
+  color: var(--seo-gold-soft);
+  font-weight: 900;
+}
+
+.seo-lead-note span {
+  color: var(--seo-muted);
+  font-size: 14px;
 }
 
 .seo-grid {

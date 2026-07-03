@@ -33,7 +33,7 @@
   <link rel="stylesheet" href="market.css?v=8" />
   <link rel="stylesheet" href="ui-polish.css?v=8" />
   <link rel="stylesheet" href="premium-version.css?v=8" />
-  <link rel="stylesheet" href="black-gold-version.css?v=14" />
+  <link rel="stylesheet" href="black-gold-version.css?v=15" />
   <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
   <script type="application/ld+json">
   {
@@ -208,8 +208,12 @@
         <h1>Stop guessing.<br><em>Start trading</em> with a plan.</h1>
         <p>Practical, no-hype trading education built around market structure, risk management, and repeatable decision-making.</p>
         <div class="hero-actions">
-          <a class="button" href="#courses">Find your course <span>&rarr;</span></a>
-          <a class="text-link" href="#method"><span class="play">&#9654;</span> See how it works</a>
+          <a class="button purchase-trigger" href="#checkout" data-plan-id="consultation" data-plan-name="Free course guidance call" data-plan-price="0">Get free callback <span>&rarr;</span></a>
+          <a class="text-link whatsapp-link" href="https://wa.me/918106739028?text=Hi%20TRADEONIX%20Academy%2C%20I%20want%20to%20know%20about%20the%20trading%20course." target="_blank" rel="noopener"><span class="play">WA</span> WhatsApp now</a>
+        </div>
+        <div class="lead-mini-card">
+          <b>Not ready to pay yet?</b>
+          <span>Send your phone number. We will explain the right course, fees, batches, and doubts before payment.</span>
         </div>
         <div class="trust-row">
           <div class="avatars"><span>AK</span><span>MR</span><span>JS</span><span>+</span></div>
@@ -305,7 +309,7 @@
         <input type="hidden" name="planName" id="checkoutPlanName" />
         <input type="hidden" name="planPrice" id="checkoutPlanPrice" />
         <label><span>Full name</span><input type="text" name="name" autocomplete="name" required /></label>
-        <label><span>Email</span><input type="email" name="email" autocomplete="email" required /></label>
+        <label><span>Email <small>optional for callback</small></span><input type="email" name="email" autocomplete="email" /></label>
         <label><span>Phone / WhatsApp</span><input type="tel" name="phone" autocomplete="tel" required /></label>
         <label><span>Message</span><textarea name="message" rows="3" placeholder="Preferred batch timing or questions"></textarea></label>
         <button class="button" type="submit">Submit request <span>&rarr;</span></button>
@@ -314,8 +318,13 @@
     </div>
   </section>
 
+  <div class="quick-lead-bar" aria-label="Quick course enquiry">
+    <button class="purchase-trigger" type="button" data-plan-id="consultation" data-plan-name="Free course guidance call" data-plan-price="0">Free callback</button>
+    <a href="https://wa.me/918106739028?text=Hi%20TRADEONIX%20Academy%2C%20I%20want%20course%20details." target="_blank" rel="noopener">WhatsApp</a>
+  </div>
+
   <footer><div class="container footer-grid"><a class="brand brand-logo footer-brand" href="#top"><img class="brand-mark logo-image" src="tradeonix-logo.svg" alt="" /><span class="brand-word"><strong>TRADEONIX</strong><small>ACADEMY</small></span></a><p>Trading education for thoughtful, disciplined market participants.</p><div><b>EXPLORE</b><a href="#courses">Courses</a><a href="trading-course-for-beginners.html">Beginner Trading Course</a><a href="nifty-trading-course.html">Nifty Trading Course</a><a href="bank-nifty-trading-course.html">Bank Nifty Course</a></div><div><b>LEGAL</b><a href="terms.html">Terms & Conditions</a><a href="privacy.html">Privacy Policy</a><a href="risk-disclaimer.html">Risk Disclaimer</a></div></div><div class="container legal"><span>&copy; 2026 TRADEONIX ACADEMY</span><span>Educational content only. Trading involves risk. Past performance does not guarantee future results.</span></div></footer>
-  <script src="script.js?v=17"></script>
+  <script src="script.js?v=18"></script>
 </body>
 </html>
 

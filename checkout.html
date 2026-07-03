@@ -14,7 +14,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>TRADEONIX Checkout</title>
   <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="checkout.css?v=2" />
+  <link rel="stylesheet" href="checkout.css?v=3" />
 </head>
 <body>
   <main class="checkout-shell">
@@ -48,12 +48,12 @@
         <form id="checkoutPageForm">
           <input type="hidden" name="planId" id="planId" />
           <label><span>Full name</span><input type="text" name="name" autocomplete="name" required /></label>
-          <label><span>Email</span><input type="email" name="email" autocomplete="email" required /></label>
+          <label><span id="emailLabel">Email</span><input type="email" name="email" autocomplete="email" required /></label>
           <label><span>Phone / WhatsApp</span><input type="tel" name="phone" autocomplete="tel" required /></label>
           <label class="coupon-field"><span>Coupon code</span><div><input type="text" name="couponCode" id="couponCode" autocomplete="off" placeholder="Enter coupon if you have one" /><button id="applyCoupon" type="button">Apply</button></div></label>
           <p class="coupon-message" id="couponMessage"></p>
           <label><span>Message</span><textarea name="message" rows="3" placeholder="Preferred batch timing or questions"></textarea></label>
-          <button type="submit">Pay with Razorpay <span>&rarr;</span></button>
+          <button type="submit" id="checkoutSubmitButton">Pay with Razorpay <span>&rarr;</span></button>
           <p class="status" id="checkoutPageStatus" role="status"></p>
         </form>
       </article>
@@ -72,7 +72,7 @@
   </section>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-  <script src="checkout.js?v=3"></script>
+  <script src="checkout.js?v=4"></script>
 </body>
 </html>
 
