@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>TRADEONIX Journal - Trading Progress Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="account.css?v=1" />
+</head>
+<body>
+  <main class="account-shell">
+    <section class="account-hero">
+      <a class="brand" href="black-gold-version.html">
+        <img src="tradeonix-logo.svg" alt="" />
+        <span><b>TRADEONIX</b><small>ACADEMY</small></span>
+      </a>
+      <div>
+        <p class="eyebrow">Student trading journal</p>
+        <h1>Track every trade. Build a cleaner process.</h1>
+        <p class="hero-copy">Save your market, direction, setup, result, emotion, and notes in one private journal so your progress becomes visible.</p>
+      </div>
+      <div class="hero-card">
+        <span>Process score</span>
+        <strong id="processScore">0%</strong>
+        <small>Improves as you record more trades and review your mistakes.</small>
+      </div>
+    </section>
+
+    <section class="account-panel" id="authPanel">
+      <div class="auth-tabs" role="tablist">
+        <button class="active" data-auth-tab="login" type="button">Login</button>
+        <button data-auth-tab="signup" type="button">Sign up</button>
+      </div>
+      <form id="authForm" class="auth-form">
+        <label id="nameField">Full name<input name="name" autocomplete="name" /></label>
+        <label>Email<input name="email" type="email" autocomplete="email" required /></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" minlength="8" required /></label>
+        <button class="primary-action" type="submit">Continue to journal <span>&rarr;</span></button>
+        <p class="form-status" id="authStatus"></p>
+      </form>
+    </section>
+
+    <section class="journal-panel hidden" id="journalPanel">
+      <div class="journal-top">
+        <div>
+          <p class="eyebrow">My account</p>
+          <h2 id="welcomeText">Welcome back</h2>
+        </div>
+        <button class="ghost-action" id="logoutButton" type="button">Logout</button>
+      </div>
+
+      <div class="stats-grid">
+        <article><span>Total trades</span><strong id="totalTrades">0</strong></article>
+        <article><span>Win rate</span><strong id="winRate">0%</strong></article>
+        <article><span>Net result</span><strong id="netResult">0</strong></article>
+      </div>
+
+      <form class="journal-form" id="journalForm">
+        <label>Date<input name="tradeDate" type="date" required /></label>
+        <label>Market<select name="market" required><option value="">Select</option><option>Nifty 50</option><option>Bank Nifty</option><option>BTC/USD</option><option>XAU/USD</option><option>Forex</option><option>Other</option></select></label>
+        <label>Direction<select name="direction" required><option value="">Select</option><option>Long</option><option>Short</option><option>Observation</option></select></label>
+        <label>Setup<input name="setup" placeholder="Breakout, pullback, support zone..." /></label>
+        <label>Result<input name="result" type="number" step="0.01" placeholder="Profit/loss amount or points" /></label>
+        <label>Risk reward<input name="riskReward" placeholder="1:2, 1:1.5..." /></label>
+        <label>Emotion<select name="emotion"><option>Calm</option><option>Fear</option><option>Greed</option><option>Revenge</option><option>Confused</option><option>Disciplined</option></select></label>
+        <label class="wide">Notes<textarea name="notes" rows="4" placeholder="Why did you take this trade? What will you improve next time?"></textarea></label>
+        <button class="primary-action" type="submit">Save trade <span>&plus;</span></button>
+        <p class="form-status" id="journalStatus"></p>
+      </form>
+
+      <div class="entries-head">
+        <h3>Recent records</h3>
+        <span id="entryCount">No trades yet</span>
+      </div>
+      <div class="entries-list" id="entriesList"></div>
+    </section>
+  </main>
+  <script src="account.js?v=1"></script>
+</body>
+</html>

@@ -1594,6 +1594,33 @@ footer {
   max-width: 650px;
 }
 
+.trading-graph-bg {
+  display: block !important;
+  opacity: 0.55;
+  filter: saturate(1.08) contrast(1.08);
+}
+
+.trading-graph-bg::before {
+  content: "NIFTY 50   BANK NIFTY   BTC/USD   XAU/USD   FOREX   RISK   JOURNAL";
+  position: absolute;
+  left: 4vw;
+  right: 4vw;
+  top: 40vh;
+  color: rgba(242, 216, 116, 0.1);
+  font: 900 clamp(42px, 8vw, 130px) Archivo, sans-serif;
+  letter-spacing: 0.12em;
+  line-height: 1.25;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.hero {
+  background:
+    radial-gradient(circle at 12% 22%, rgba(242, 216, 116, 0.16), transparent 28%),
+    radial-gradient(circle at 82% 16%, rgba(120, 164, 64, 0.12), transparent 30%),
+    linear-gradient(130deg, rgba(242, 216, 116, 0.08), transparent 48%);
+}
+
 .lead-mini-card {
   display: grid;
   gap: 4px;

@@ -112,10 +112,10 @@ function makeSparkline(price, change = 0) {
 }
 
 const fallbackFeeds = {
-  nifty: { price: 25112.40, change: 0.42, prices: makeSparkline(25112.40, 0.42), decimals: 2, lastPrice: true },
-  banknifty: { price: 56825.20, change: 0.36, prices: makeSparkline(56825.20, 0.36), decimals: 2, lastPrice: true },
-  gold: { price: 4191.50, change: 0.18, prices: makeSparkline(4191.50, 0.18), decimals: 2, lastPrice: true },
-  bitcoin: { price: 104250.00, change: -0.31, prices: makeSparkline(104250.00, -0.31), decimals: 2 }
+  nifty: { price: 25112.40, change: 0.42, prices: makeSparkline(25112.40, 0.42), decimals: 2, lastPrice: true, stale: true },
+  banknifty: { price: 56825.20, change: 0.36, prices: makeSparkline(56825.20, 0.36), decimals: 2, lastPrice: true, stale: true },
+  gold: { price: 4191.50, change: 0.18, prices: makeSparkline(4191.50, 0.18), decimals: 2, lastPrice: true, stale: true },
+  bitcoin: { price: 104250.00, change: -0.31, prices: makeSparkline(104250.00, -0.31), decimals: 2, stale: true }
 };
 
 const headerMarketFeeds = {
@@ -127,13 +127,21 @@ const headerMarketFeeds = {
 
 function formatMarketPrice(quote) {
   const decimals = Number.isInteger(quote.decimals) ? quote.decimals : 2;
-  return Number(quote.price).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  const price = Number(quote.price);
+  if (!Number.isFinite(price)) return 'Updating';
+  return price.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 function renderHeaderMarket(name, quote) {
   document.querySelectorAll(`.header-market-item[data-market="${name}"]`).forEach((item) => {
     const price = item.querySelector('strong');
     const change = item.querySelector('em');
+    if (quote.stale) {
+      price.textContent = 'Updating';
+      change.textContent = 'LIVE';
+      change.classList.remove('negative');
+      return;
+    }
     price.textContent = formatMarketPrice(quote);
     if (quote.lastPrice) {
       change.textContent = 'LAST';
