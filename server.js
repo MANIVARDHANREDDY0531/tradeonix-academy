@@ -917,6 +917,24 @@ function buildOtpMessage(name, otp, purpose) {
   ].join('\n');
 }
 
+function getEmailSetupError(error) {
+  const rawMessage = String(error?.message || 'Unknown Resend error');
+  const message = rawMessage.toLowerCase();
+  const safeProviderMessage = rawMessage
+    .replace(/re_[A-Za-z0-9_\-]+/g, 're_***')
+    .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]');
+  if (message.includes('testing emails') || message.includes('own email') || message.includes('audience')) {
+    return `OTP email failed. Resend test mode can send only to your verified Resend account email. Provider: ${safeProviderMessage}`;
+  }
+  if (message.includes('api key') || message.includes('unauthorized') || message.includes('401') || message.includes('invalid_api_key')) {
+    return `OTP email failed. Please check RESEND_API_KEY in Railway variables. Provider: ${safeProviderMessage}`;
+  }
+  if (message.includes('domain') || message.includes('sender') || message.includes('from') || message.includes('verify') || message.includes('not verified')) {
+    return `OTP email failed. Please verify your sender domain/email in Resend and check NOTIFICATION_FROM_EMAIL. Provider: ${safeProviderMessage}`;
+  }
+  return `OTP email failed. Please check Resend setup, sender email, and Railway variables. Provider: ${safeProviderMessage}`;
+}
+
 async function handleRequestSignupOtp(request, response) {
   try {
     if (!canSendOtpEmail()) return sendJson(response, 500, { error: 'Email OTP is not configured yet. Please add RESEND_API_KEY and NOTIFICATION_FROM_EMAIL in Railway variables.' });
@@ -937,7 +955,7 @@ async function handleRequestSignupOtp(request, response) {
     }
 
     const otp = generateOtp();
-    saveOtpRecord({
+    const otpRecord = {
       id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
       purpose: 'signup',
       name,
@@ -948,12 +966,18 @@ async function handleRequestSignupOtp(request, response) {
       createdAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
       nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
-    });
+    };
 
-    await sendEmail(email, 'Your TRADEONIX account OTP', buildOtpMessage(name, otp, 'signup'));
+    try {
+      await sendEmail(email, 'Your TRADEONIX account OTP', buildOtpMessage(name, otp, 'signup'));
+    } catch (emailError) {
+      console.warn(`Signup OTP email failed for ${email}: ${emailError.message}`);
+      return sendJson(response, 502, { error: getEmailSetupError(emailError) });
+    }
+    saveOtpRecord(otpRecord);
     sendJson(response, 200, { ok: true, message: 'OTP sent to your email. Please verify to create account.' });
   } catch (error) {
-    sendJson(response, 400, { error: 'Could not send OTP. Please try again.' });
+    sendJson(response, 400, { error: error.message || 'Could not send OTP. Please try again.' });
   }
 }
 
@@ -1001,7 +1025,7 @@ async function handleRequestPasswordReset(request, response) {
 
     if (user) {
       const otp = generateOtp();
-      saveOtpRecord({
+      const otpRecord = {
         id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
         purpose: 'reset',
         name: user.name,
@@ -1011,13 +1035,19 @@ async function handleRequestPasswordReset(request, response) {
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
         nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
-      });
-      await sendEmail(email, 'Your TRADEONIX password reset OTP', buildOtpMessage(user.name, otp, 'reset'));
+      };
+      try {
+        await sendEmail(email, 'Your TRADEONIX password reset OTP', buildOtpMessage(user.name, otp, 'reset'));
+      } catch (emailError) {
+        console.warn(`Password reset OTP email failed for ${email}: ${emailError.message}`);
+        return sendJson(response, 502, { error: getEmailSetupError(emailError) });
+      }
+      saveOtpRecord(otpRecord);
     }
 
     sendJson(response, 200, { ok: true, message: 'If this email exists, a reset OTP has been sent.' });
   } catch (error) {
-    sendJson(response, 400, { error: 'Could not send reset OTP. Please try again.' });
+    sendJson(response, 400, { error: error.message || 'Could not send reset OTP. Please try again.' });
   }
 }
 
