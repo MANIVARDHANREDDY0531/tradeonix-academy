@@ -327,6 +327,32 @@ td small,
   min-height: 52px;
 }
 
+.form-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.form-actions button {
+  min-width: 190px;
+}
+
+.ghost-button,
+.edit-button {
+  border: 1px solid rgba(244, 213, 111, .28);
+  border-radius: 7px;
+  padding: 9px 12px;
+  background: rgba(244, 213, 111, .09);
+  color: var(--gold);
+  font-weight: 950;
+}
+
+.row-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .method-box {
   display: flex;
   flex-wrap: wrap;

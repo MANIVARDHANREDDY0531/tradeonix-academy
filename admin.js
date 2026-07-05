@@ -14,6 +14,9 @@ const requestRows = document.querySelector('#requestRows');
 const clientForm = document.querySelector('#clientForm');
 const clientCards = document.querySelector('#clientCards');
 const orderForm = document.querySelector('#orderForm');
+const editOrderId = document.querySelector('#editOrderId');
+const orderSubmitButton = document.querySelector('#orderSubmitButton');
+const cancelEditOrder = document.querySelector('#cancelEditOrder');
 const orderClientSelect = document.querySelector('#orderClientSelect');
 const orderRows = document.querySelector('#orderRows');
 const orderSearch = document.querySelector('#orderSearch');
@@ -76,7 +79,7 @@ async function apiFetch(url, options = {}) {
   });
   const data = await readJsonResponse(response);
   if (response.status === 401) {
-    showLogin('Wrong keyword. Please enter SVMJM5 or your Railway ADMIN_ACCESS_KEY.');
+    showLogin('Keyword is wrong.');
     throw new Error('Admin access required.');
   }
   if (!response.ok) {
@@ -116,6 +119,12 @@ function formatDate(value) {
     dateStyle: 'medium',
     timeStyle: 'short'
   });
+}
+
+function formatOrderDateTime(order) {
+  if (order.transactionAt) return formatDate(order.transactionAt);
+  if (order.orderDate && order.orderTime) return `${order.orderDate} ${order.orderTime}`;
+  return formatDate(order.orderDate || order.createdAt);
 }
 
 function setStatus(message) {
@@ -248,8 +257,8 @@ function renderOrders() {
       <td>${formatNumber(order.clientUsdtDelivered ?? order.quantity, 4)} USDT</td>
       <td><strong class="${orderProfitUsdt(order) >= 0 ? 'profit-positive' : 'profit-negative'}">${formatNumber(orderProfitUsdt(order), 4)} USDT</strong><small>${formatAmount(order.estimatedProfitInr)}</small></td>
       <td>${escapeHtml(order.sellerAccountPaidTo || '-')}<small>${escapeHtml(order.sellerPaymentMethod || order.paymentMethod || '-')} / ${escapeHtml(order.sellerBankTransactionId || order.bankTransactionId || 'No tx ID')}</small></td>
-      <td>${formatDate(order.orderDate || order.createdAt)}</td>
-      <td><button class="danger-button delete-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Delete</button></td>
+      <td>${formatOrderDateTime(order)}</td>
+      <td class="row-actions"><button class="edit-button edit-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Edit</button><button class="danger-button delete-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Delete</button></td>
     </tr>
   `).join('');
 }
@@ -406,24 +415,55 @@ async function handleOrderSubmit(event) {
   event.preventDefault();
   const button = orderForm.querySelector('button[type="submit"]');
   button.disabled = true;
-  setStatus('Generating USDT order...');
+  const orderId = editOrderId.value.trim();
+  setStatus(orderId ? 'Updating USDT order...' : 'Generating USDT order...');
   try {
     const formData = new FormData(orderForm);
     const payload = Object.fromEntries(formData.entries());
-    await apiFetch('/api/admin/usdt-orders', {
-      method: 'POST',
+    if (!payload.orderId) delete payload.orderId;
+    await apiFetch(orderId ? `/api/admin/usdt-orders/${encodeURIComponent(orderId)}` : '/api/admin/usdt-orders', {
+      method: orderId ? 'PATCH' : 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    orderForm.reset();
+    resetOrderForm();
     await loadAll();
     activateTab('orders');
-    setStatus('USDT order generated and report updated.');
+    setStatus(orderId ? 'USDT order updated and reports refreshed.' : 'USDT order generated and report updated.');
   } catch (error) {
-    setStatus(error.message || 'Could not generate order.');
+    setStatus(error.message || (orderId ? 'Could not update order.' : 'Could not generate order.'));
   } finally {
     button.disabled = false;
   }
+}
+
+function resetOrderForm() {
+  orderForm.reset();
+  editOrderId.value = '';
+  orderSubmitButton.textContent = 'Generate order';
+  cancelEditOrder.hidden = true;
+}
+
+function fillOrderForm(order) {
+  editOrderId.value = order.orderId || '';
+  orderForm.elements.clientId.value = order.clientId || '';
+  orderForm.elements.orderSide.value = order.orderSide || 'client_buy_usdt';
+  orderForm.elements.orderDate.value = order.orderDate || '';
+  orderForm.elements.orderTime.value = order.orderTime || '';
+  orderForm.elements.inrAmount.value = order.inrAmount ?? '';
+  orderForm.elements.buyPrice.value = order.buyPrice ?? '';
+  orderForm.elements.sellPrice.value = order.sellPrice ?? '';
+  orderForm.elements.quantity.value = order.orderSide === 'client_sell_usdt' ? (order.quantity ?? '') : '';
+  orderForm.elements.sellerAccountPaidTo.value = order.sellerAccountPaidTo || '';
+  orderForm.elements.sellerPaymentMethod.value = order.sellerPaymentMethod || 'UPI';
+  orderForm.elements.sellerBankTransactionId.value = order.sellerBankTransactionId || '';
+  orderForm.elements.paymentMethod.value = order.paymentMethod || 'UPI';
+  orderForm.elements.bankTransactionId.value = order.bankTransactionId || '';
+  orderForm.elements.status.value = order.status || 'completed';
+  orderForm.elements.notes.value = order.notes || '';
+  orderSubmitButton.textContent = 'Update order';
+  cancelEditOrder.hidden = false;
+  orderForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 adminLoginForm.addEventListener('submit', (event) => {
@@ -443,6 +483,7 @@ logoutButton.addEventListener('click', () => showLogin('Admin portal locked.'));
 tabButtons.forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
 clientForm.addEventListener('submit', handleClientSubmit);
 orderForm.addEventListener('submit', handleOrderSubmit);
+cancelEditOrder.addEventListener('click', resetOrderForm);
 
 requestRows.addEventListener('click', async (event) => {
   const button = event.target.closest('.delete-request');
@@ -495,6 +536,18 @@ clientCards.addEventListener('click', async (event) => {
 });
 
 orderRows.addEventListener('click', async (event) => {
+  const editButton = event.target.closest('.edit-order');
+  if (editButton) {
+    const order = state.orders.find((item) => item.orderId === editButton.dataset.orderId);
+    if (!order) {
+      setStatus('Order not found. Please refresh and try again.');
+      return;
+    }
+    fillOrderForm(order);
+    setStatus(`Editing ${order.orderId}. Update the fields and click Update order.`);
+    return;
+  }
+
   const button = event.target.closest('.delete-order');
   if (!button) return;
   const orderId = button.dataset.orderId;
