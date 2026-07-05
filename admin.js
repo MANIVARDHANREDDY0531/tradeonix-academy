@@ -17,6 +17,7 @@ const orderForm = document.querySelector('#orderForm');
 const orderClientSelect = document.querySelector('#orderClientSelect');
 const orderRows = document.querySelector('#orderRows');
 const orderSearch = document.querySelector('#orderSearch');
+const profitRows = document.querySelector('#profitRows');
 const monthlyReport = document.querySelector('#monthlyReport');
 const yearlyReport = document.querySelector('#yearlyReport');
 const tabButtons = document.querySelectorAll('.admin-tabs button');
@@ -24,6 +25,7 @@ const sections = {
   requests: document.querySelector('#requestsSection'),
   clients: document.querySelector('#clientsSection'),
   orders: document.querySelector('#ordersSection'),
+  profits: document.querySelector('#profitsSection'),
   reports: document.querySelector('#reportsSection')
 };
 
@@ -124,6 +126,17 @@ function orderSideLabel(value) {
   return value === 'client_sell_usdt' ? 'Client sold USDT to us' : 'Client bought USDT from us';
 }
 
+function orderProfitUsdt(order) {
+  if (order.profitUsdt !== undefined) return Number(order.profitUsdt || 0);
+  if (order.estimatedProfitInr !== undefined && Number(order.sellPrice || 0) > 0) {
+    return Number(order.estimatedProfitInr || 0) / Number(order.sellPrice || 1);
+  }
+  if (Number(order.sellPrice || 0) > 0 && Number(order.profit || 0) > 0) {
+    return Number(order.profit || 0) / Number(order.sellPrice || 1);
+  }
+  return Number(order.profit || 0);
+}
+
 function getPaymentStatus(item) {
   if (item.paymentStatus) return item.paymentStatus;
   if (!Number(item.planPrice || 0)) return 'not_required';
@@ -149,8 +162,8 @@ function renderSummary() {
   totalClients.textContent = state.clients.length;
   totalOrders.textContent = state.orders.length;
   totalRequests.textContent = state.requests.length;
-  const profit = state.orders.reduce((sum, item) => sum + Number(item.profit || 0), 0);
-  totalProfit.textContent = formatAmount(profit);
+  const profit = state.orders.reduce((sum, item) => sum + orderProfitUsdt(item), 0);
+  totalProfit.textContent = `${formatNumber(profit, 4)} USDT`;
 }
 
 function renderRequests() {
@@ -219,7 +232,7 @@ function renderClients() {
 
 function renderOrders() {
   if (!state.orders.length) {
-    orderRows.innerHTML = '<tr><td colspan="11" class="empty">No USDT orders yet.</td></tr>';
+    orderRows.innerHTML = '<tr><td colspan="12" class="empty">No USDT orders yet.</td></tr>';
     return;
   }
 
@@ -228,15 +241,39 @@ function renderOrders() {
       <td><span class="reference">${escapeHtml(order.orderId)}</span><small>${escapeHtml(order.status || 'completed')}</small></td>
       <td><strong>${escapeHtml(order.clientName)}</strong><small>${escapeHtml(order.clientId)}</small></td>
       <td><span class="side-pill ${order.orderSide === 'client_sell_usdt' ? 'sell' : 'buy'}">${escapeHtml(orderSideLabel(order.orderSide))}</span></td>
-      <td>${formatNumber(order.quantity, 4)} USDT</td>
+      <td>${formatAmount(order.inrAmount)}</td>
       <td>${formatAmount(order.buyPrice)}</td>
       <td>${formatAmount(order.sellPrice)}</td>
-      <td>${formatAmount(order.inrAmount)}</td>
-      <td><strong class="${Number(order.profit || 0) >= 0 ? 'profit-positive' : 'profit-negative'}">${formatAmount(order.profit)}</strong></td>
-      <td>${escapeHtml(order.paymentMethod || '-')}<small>${escapeHtml(order.bankTransactionId || 'No bank tx ID')}</small></td>
+      <td>${formatNumber(order.sellerUsdtReceived, 4)} USDT</td>
+      <td>${formatNumber(order.clientUsdtDelivered ?? order.quantity, 4)} USDT</td>
+      <td><strong class="${orderProfitUsdt(order) >= 0 ? 'profit-positive' : 'profit-negative'}">${formatNumber(orderProfitUsdt(order), 4)} USDT</strong><small>${formatAmount(order.estimatedProfitInr)}</small></td>
+      <td>${escapeHtml(order.sellerAccountPaidTo || '-')}<small>${escapeHtml(order.sellerPaymentMethod || order.paymentMethod || '-')} / ${escapeHtml(order.sellerBankTransactionId || order.bankTransactionId || 'No tx ID')}</small></td>
       <td>${formatDate(order.orderDate || order.createdAt)}</td>
       <td><button class="danger-button delete-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Delete</button></td>
     </tr>
+  `).join('');
+}
+
+function renderProfits() {
+  const profitOrders = state.orders.filter((order) => orderProfitUsdt(order) !== 0);
+  if (!profitOrders.length) {
+    profitRows.innerHTML = '<p class="empty-card">No USDT profit records yet.</p>';
+    return;
+  }
+
+  profitRows.innerHTML = profitOrders.map((order) => `
+    <article class="profit-card">
+      <div>
+        <span class="reference">${escapeHtml(order.orderId)}</span>
+        <h3>${escapeHtml(order.clientName || 'Client')}</h3>
+        <p>${formatAmount(order.inrAmount)} paid to seller account: <strong>${escapeHtml(order.sellerAccountPaidTo || '-')}</strong></p>
+      </div>
+      <div class="profit-math">
+        <span>Seller gave <strong>${formatNumber(order.sellerUsdtReceived, 4)} USDT</strong></span>
+        <span>Client received <strong>${formatNumber(order.clientUsdtDelivered ?? order.quantity, 4)} USDT</strong></span>
+        <b>Profit ${formatNumber(orderProfitUsdt(order), 4)} USDT</b>
+      </div>
+    </article>
   `).join('');
 }
 
@@ -251,9 +288,10 @@ function reportRows(items) {
       <span>Client buys ${formatNumber(item.buyOrders, 0)}</span>
       <span>Client sells ${formatNumber(item.sellOrders, 0)}</span>
       <span>USDT out ${formatNumber(item.usdtBoughtByClients, 4)}</span>
+      <span>USDT bought from seller ${formatNumber(item.usdtPurchasedFromSellers, 4)}</span>
       <span>USDT in ${formatNumber(item.usdtSoldByClients, 4)}</span>
       <span>Value ${formatAmount(item.revenue)}</span>
-      <b>Profit ${formatAmount(item.profit)}</b>
+      <b>Profit ${formatNumber(item.usdtProfit ?? item.profit, 4)} USDT</b>
     </div>
   `).join('');
 }
@@ -268,6 +306,7 @@ function renderAll() {
   renderRequests();
   renderClients();
   renderOrders();
+  renderProfits();
   renderReports();
 }
 
@@ -277,6 +316,7 @@ async function loadOrders(search = '') {
   state.orders = data.orders || [];
   renderSummary();
   renderOrders();
+  renderProfits();
 }
 
 async function loadAll() {

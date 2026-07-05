@@ -832,18 +832,32 @@ function toNumber(value) {
 }
 
 function calculateUsdtOrder(rawOrder) {
-  const quantity = toNumber(rawOrder.quantity);
+  const explicitQuantity = toNumber(rawOrder.quantity);
   const buyPrice = toNumber(rawOrder.buyPrice);
   const sellPrice = toNumber(rawOrder.sellPrice);
   const orderSide = clean(rawOrder.orderSide) || 'client_buy_usdt';
-  const inrAmount = toNumber(rawOrder.inrAmount) || quantity * (orderSide === 'client_buy_usdt' ? sellPrice : buyPrice);
-  const profit = orderSide === 'client_buy_usdt' ? (sellPrice - buyPrice) * quantity : 0;
+  const inrAmount = toNumber(rawOrder.inrAmount) || explicitQuantity * (orderSide === 'client_buy_usdt' ? sellPrice : buyPrice);
+  const sellerUsdtReceived = orderSide === 'client_buy_usdt' && buyPrice > 0
+    ? inrAmount / buyPrice
+    : 0;
+  const clientUsdtDelivered = orderSide === 'client_buy_usdt' && sellPrice > 0
+    ? inrAmount / sellPrice
+    : explicitQuantity;
+  const usdtReceivedFromClient = orderSide === 'client_sell_usdt' ? explicitQuantity : 0;
+  const quantity = orderSide === 'client_buy_usdt' ? clientUsdtDelivered : explicitQuantity;
+  const profitUsdt = orderSide === 'client_buy_usdt' ? sellerUsdtReceived - clientUsdtDelivered : 0;
+  const estimatedProfitInr = orderSide === 'client_buy_usdt' ? profitUsdt * sellPrice : 0;
   return {
     quantity,
     buyPrice,
     sellPrice,
     inrAmount,
-    profit: Number(profit.toFixed(2))
+    sellerUsdtReceived: Number(sellerUsdtReceived.toFixed(4)),
+    clientUsdtDelivered: Number(clientUsdtDelivered.toFixed(4)),
+    usdtReceivedFromClient: Number(usdtReceivedFromClient.toFixed(4)),
+    profitUsdt: Number(profitUsdt.toFixed(4)),
+    estimatedProfitInr: Number(estimatedProfitInr.toFixed(2)),
+    profit: Number(profitUsdt.toFixed(4))
   };
 }
 
@@ -851,8 +865,15 @@ function getClientName(clientId) {
   return readJsonStore(clientsPath).find((client) => client.clientId === clientId)?.name || '';
 }
 
+function getOrderProfitUsdt(order) {
+  if (order.profitUsdt !== undefined) return toNumber(order.profitUsdt);
+  if (order.estimatedProfitInr !== undefined && toNumber(order.sellPrice) > 0) return toNumber(order.estimatedProfitInr) / toNumber(order.sellPrice);
+  if (toNumber(order.sellPrice) > 0 && toNumber(order.profit) > 0) return toNumber(order.profit) / toNumber(order.sellPrice);
+  return toNumber(order.profit);
+}
+
 function buildReports(orders) {
-  const makeBucket = () => ({ buyOrders: 0, sellOrders: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0, revenue: 0, profit: 0, orders: 0 });
+  const makeBucket = () => ({ buyOrders: 0, sellOrders: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0, usdtPurchasedFromSellers: 0, usdtProfit: 0, revenue: 0, profit: 0, estimatedProfitInr: 0, orders: 0 });
   const monthly = {};
   const yearly = {};
   for (const order of orders) {
@@ -863,10 +884,13 @@ function buildReports(orders) {
     for (const bucket of [monthly[monthKey] ||= makeBucket(), yearly[yearKey] ||= makeBucket()]) {
       bucket.orders += 1;
       bucket.revenue += toNumber(order.inrAmount);
-      bucket.profit += toNumber(order.profit);
+      bucket.profit += getOrderProfitUsdt(order);
+      bucket.usdtProfit += getOrderProfitUsdt(order);
+      bucket.estimatedProfitInr += toNumber(order.estimatedProfitInr);
       if (order.orderSide === 'client_buy_usdt') {
         bucket.buyOrders += 1;
         bucket.usdtBoughtByClients += toNumber(order.quantity);
+        bucket.usdtPurchasedFromSellers += toNumber(order.sellerUsdtReceived);
       } else {
         bucket.sellOrders += 1;
         bucket.usdtSoldByClients += toNumber(order.quantity);
@@ -876,9 +900,12 @@ function buildReports(orders) {
   const normalize = (record) => ({
     ...record,
     revenue: Number(record.revenue.toFixed(2)),
-    profit: Number(record.profit.toFixed(2)),
+    profit: Number(record.profit.toFixed(4)),
+    usdtProfit: Number(record.usdtProfit.toFixed(4)),
+    estimatedProfitInr: Number(record.estimatedProfitInr.toFixed(2)),
     usdtBoughtByClients: Number(record.usdtBoughtByClients.toFixed(4)),
-    usdtSoldByClients: Number(record.usdtSoldByClients.toFixed(4))
+    usdtSoldByClients: Number(record.usdtSoldByClients.toFixed(4)),
+    usdtPurchasedFromSellers: Number(record.usdtPurchasedFromSellers.toFixed(4))
   });
   return {
     monthly: Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).map(([period, record]) => ({ period, ...normalize(record) })),
@@ -1269,6 +1296,9 @@ async function handleAdminUsdtOrders(request, response) {
         order.clientName,
         order.clientId,
         order.bankTransactionId,
+        order.sellerAccountPaidTo,
+        order.sellerPaymentMethod,
+        order.sellerBankTransactionId,
         order.paymentMethod,
         order.orderSide
       ].some((value) => String(value || '').toLowerCase().includes(query)));
@@ -1297,6 +1327,9 @@ async function handleAdminUsdtOrders(request, response) {
       orderDate: clean(body.orderDate) || now.slice(0, 10),
       paymentMethod: clean(body.paymentMethod),
       bankTransactionId: clean(body.bankTransactionId),
+      sellerAccountPaidTo: clean(body.sellerAccountPaidTo),
+      sellerPaymentMethod: clean(body.sellerPaymentMethod),
+      sellerBankTransactionId: clean(body.sellerBankTransactionId),
       status: clean(body.status) || 'completed',
       notes: clean(body.notes),
       createdAt: now,
@@ -1329,9 +1362,12 @@ function handleAdminReports(request, response) {
     orders: sum.orders + row.orders,
     revenue: sum.revenue + row.revenue,
     profit: sum.profit + row.profit,
+    usdtProfit: sum.usdtProfit + row.usdtProfit,
+    estimatedProfitInr: sum.estimatedProfitInr + row.estimatedProfitInr,
+    usdtPurchasedFromSellers: sum.usdtPurchasedFromSellers + row.usdtPurchasedFromSellers,
     usdtBoughtByClients: sum.usdtBoughtByClients + row.usdtBoughtByClients,
     usdtSoldByClients: sum.usdtSoldByClients + row.usdtSoldByClients
-  }), { orders: 0, revenue: 0, profit: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0 });
+  }), { orders: 0, revenue: 0, profit: 0, usdtProfit: 0, estimatedProfitInr: 0, usdtPurchasedFromSellers: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0 });
   sendJson(response, 200, { ...reports, totals });
 }
 
