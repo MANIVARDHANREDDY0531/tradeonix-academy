@@ -11,6 +11,8 @@ const usersPath = path.join(dataDir, 'users.json');
 const sessionsPath = path.join(dataDir, 'sessions.json');
 const journalsPath = path.join(dataDir, 'journal-entries.json');
 const otpStorePath = path.join(dataDir, 'auth-otps.json');
+const clientsPath = path.join(dataDir, 'clients.json');
+const usdtOrdersPath = path.join(dataDir, 'usdt-orders.json');
 const couponsPath = path.join(root, 'coupons.json');
 const port = Number(process.env.PORT || 8766);
 
@@ -30,6 +32,7 @@ const whatsappCloudToken = process.env.WHATSAPP_CLOUD_TOKEN || '';
 const whatsappPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
 const adminUsername = process.env.ADMIN_USERNAME || '';
 const adminPassword = process.env.ADMIN_PASSWORD || '';
+const adminAccessKey = process.env.ADMIN_ACCESS_KEY || 'SVMJM5';
 const otpSecret = process.env.OTP_SECRET || razorpayKeySecret || process.env.SESSION_SECRET || 'tradeonix-local-otp-secret';
 
 const plans = {
@@ -74,7 +77,7 @@ const marketFeeds = {
 
 function sendJson(response, status, payload) {
   response.writeHead(status, {
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Key',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json; charset=utf-8'
@@ -667,7 +670,7 @@ function readRequestBody(request) {
     let body = '';
     request.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
+      if (body.length > 10_000_000) {
         request.destroy();
         reject(new Error('Request is too large'));
       }
@@ -794,6 +797,93 @@ function readJsonStore(filePath, fallback = []) {
 function writeJsonStore(filePath, records) {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(records, null, 2), 'utf8');
+}
+
+function isAdminKeyRequest(request) {
+  const key = clean(request.headers['x-admin-key']);
+  return key && safeCompare(key, adminAccessKey);
+}
+
+function requireAdminKey(request, response) {
+  if (isAdminKeyRequest(request)) return true;
+  sendJson(response, 401, { error: 'Admin keyword required.' });
+  return false;
+}
+
+function readClients() {
+  return readJsonStore(clientsPath).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function writeClients(clients) {
+  writeJsonStore(clientsPath, clients);
+}
+
+function readUsdtOrders() {
+  return readJsonStore(usdtOrdersPath).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function writeUsdtOrders(orders) {
+  writeJsonStore(usdtOrdersPath, orders);
+}
+
+function toNumber(value) {
+  const number = Number(value || 0);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function calculateUsdtOrder(rawOrder) {
+  const quantity = toNumber(rawOrder.quantity);
+  const buyPrice = toNumber(rawOrder.buyPrice);
+  const sellPrice = toNumber(rawOrder.sellPrice);
+  const orderSide = clean(rawOrder.orderSide) || 'client_buy_usdt';
+  const inrAmount = toNumber(rawOrder.inrAmount) || quantity * (orderSide === 'client_buy_usdt' ? sellPrice : buyPrice);
+  const profit = orderSide === 'client_buy_usdt' ? (sellPrice - buyPrice) * quantity : 0;
+  return {
+    quantity,
+    buyPrice,
+    sellPrice,
+    inrAmount,
+    profit: Number(profit.toFixed(2))
+  };
+}
+
+function getClientName(clientId) {
+  return readJsonStore(clientsPath).find((client) => client.clientId === clientId)?.name || '';
+}
+
+function buildReports(orders) {
+  const makeBucket = () => ({ buyOrders: 0, sellOrders: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0, revenue: 0, profit: 0, orders: 0 });
+  const monthly = {};
+  const yearly = {};
+  for (const order of orders) {
+    const date = new Date(order.orderDate || order.createdAt);
+    if (Number.isNaN(date.getTime())) continue;
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const yearKey = String(date.getFullYear());
+    for (const bucket of [monthly[monthKey] ||= makeBucket(), yearly[yearKey] ||= makeBucket()]) {
+      bucket.orders += 1;
+      bucket.revenue += toNumber(order.inrAmount);
+      bucket.profit += toNumber(order.profit);
+      if (order.orderSide === 'client_buy_usdt') {
+        bucket.buyOrders += 1;
+        bucket.usdtBoughtByClients += toNumber(order.quantity);
+      } else {
+        bucket.sellOrders += 1;
+        bucket.usdtSoldByClients += toNumber(order.quantity);
+      }
+    }
+  }
+  const normalize = (record) => ({
+    ...record,
+    revenue: Number(record.revenue.toFixed(2)),
+    profit: Number(record.profit.toFixed(2)),
+    usdtBoughtByClients: Number(record.usdtBoughtByClients.toFixed(4)),
+    usdtSoldByClients: Number(record.usdtSoldByClients.toFixed(4))
+  });
+  return {
+    monthly: Object.entries(monthly).sort((a, b) => b[0].localeCompare(a[0])).map(([period, record]) => ({ period, ...normalize(record) })),
+    yearly: Object.entries(yearly).sort((a, b) => b[0].localeCompare(a[0])).map(([period, record]) => ({ period, ...normalize(record) }))
+  };
 }
 
 function publicUser(user) {
@@ -1107,6 +1197,142 @@ function handleLogout(request, response) {
   const token = getBearerToken(request);
   if (token) removeSession(token);
   sendJson(response, 200, { ok: true });
+}
+
+async function handleAdminClients(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  if (request.method === 'GET') {
+    sendJson(response, 200, { clients: readClients() });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const name = clean(body.name);
+    const phone = clean(body.phone);
+    const email = clean(body.email).toLowerCase();
+    if (name.length < 2) return sendJson(response, 400, { error: 'Client name is required.' });
+    if (email && !isValidEmail(email)) return sendJson(response, 400, { error: 'Enter a valid client email.' });
+    if (phone && !isValidPhone(phone)) return sendJson(response, 400, { error: 'Enter a valid client phone.' });
+
+    const clients = readJsonStore(clientsPath);
+    const now = new Date().toISOString();
+    const client = {
+      clientId: clean(body.clientId) || `CL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+      name,
+      phone,
+      email,
+      address: clean(body.address),
+      pan: clean(body.pan).toUpperCase(),
+      aadhaar: clean(body.aadhaar),
+      paymentMethods: Array.isArray(body.paymentMethods) ? body.paymentMethods.map((item) => clean(item)).filter(Boolean) : [],
+      bankName: clean(body.bankName),
+      bankAccount: clean(body.bankAccount),
+      upiId: clean(body.upiId),
+      kycFiles: Array.isArray(body.kycFiles) ? body.kycFiles.slice(0, 5).map((file) => ({
+        name: clean(file.name).slice(0, 120),
+        type: clean(file.type).slice(0, 80),
+        dataUrl: String(file.dataUrl || '').slice(0, 4_000_000),
+        uploadedAt: now
+      })).filter((file) => file.dataUrl.startsWith('data:')) : [],
+      notes: clean(body.notes),
+      status: clean(body.status) || 'active',
+      createdAt: now,
+      updatedAt: now
+    };
+    clients.push(client);
+    writeClients(clients);
+    sendJson(response, 201, { ok: true, client });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not save client.' });
+  }
+}
+
+function handleDeleteAdminClient(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const clientId = decodeURIComponent(request.url.split('/').pop() || '');
+  const clients = readJsonStore(clientsPath);
+  const nextClients = clients.filter((client) => client.clientId !== clientId);
+  if (clients.length === nextClients.length) return sendJson(response, 404, { error: 'Client not found.' });
+  writeClients(nextClients);
+  sendJson(response, 200, { ok: true });
+}
+
+async function handleAdminUsdtOrders(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  if (request.method === 'GET') {
+    const url = new URL(request.url, `http://${request.headers.host}`);
+    const query = clean(url.searchParams.get('search')).toLowerCase();
+    let orders = readUsdtOrders();
+    if (query) {
+      orders = orders.filter((order) => [
+        order.orderId,
+        order.clientName,
+        order.clientId,
+        order.bankTransactionId,
+        order.paymentMethod,
+        order.orderSide
+      ].some((value) => String(value || '').toLowerCase().includes(query)));
+    }
+    sendJson(response, 200, { orders });
+    return;
+  }
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const clientId = clean(body.clientId);
+    const orderSide = clean(body.orderSide);
+    if (!clientId) return sendJson(response, 400, { error: 'Select a client.' });
+    if (!['client_buy_usdt', 'client_sell_usdt'].includes(orderSide)) return sendJson(response, 400, { error: 'Select buy/sell order type.' });
+    const calculated = calculateUsdtOrder({ ...body, orderSide });
+    if (calculated.quantity <= 0) return sendJson(response, 400, { error: 'USDT quantity is required.' });
+    if (orderSide === 'client_buy_usdt' && (!calculated.buyPrice || !calculated.sellPrice)) {
+      return sendJson(response, 400, { error: 'Buy price and sell price are required to calculate profit.' });
+    }
+
+    const now = new Date().toISOString();
+    const order = {
+      orderId: `USDT-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
+      clientId,
+      clientName: getClientName(clientId),
+      orderSide,
+      orderDate: clean(body.orderDate) || now.slice(0, 10),
+      paymentMethod: clean(body.paymentMethod),
+      bankTransactionId: clean(body.bankTransactionId),
+      status: clean(body.status) || 'completed',
+      notes: clean(body.notes),
+      createdAt: now,
+      ...calculated
+    };
+    const orders = readJsonStore(usdtOrdersPath);
+    orders.push(order);
+    writeUsdtOrders(orders);
+    sendJson(response, 201, { ok: true, order });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not save USDT order.' });
+  }
+}
+
+function handleDeleteAdminUsdtOrder(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const orderId = decodeURIComponent(request.url.split('/').pop() || '');
+  const orders = readJsonStore(usdtOrdersPath);
+  const nextOrders = orders.filter((order) => order.orderId !== orderId);
+  if (orders.length === nextOrders.length) return sendJson(response, 404, { error: 'Order not found.' });
+  writeUsdtOrders(nextOrders);
+  sendJson(response, 200, { ok: true });
+}
+
+function handleAdminReports(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const orders = readUsdtOrders();
+  const reports = buildReports(orders);
+  const totals = reports.yearly.reduce((sum, row) => ({
+    orders: sum.orders + row.orders,
+    revenue: sum.revenue + row.revenue,
+    profit: sum.profit + row.profit,
+    usdtBoughtByClients: sum.usdtBoughtByClients + row.usdtBoughtByClients,
+    usdtSoldByClients: sum.usdtSoldByClients + row.usdtSoldByClients
+  }), { orders: 0, revenue: 0, profit: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0 });
+  sendJson(response, 200, { ...reports, totals });
 }
 
 function handleJournalList(request, response) {
@@ -1519,6 +1745,12 @@ function serveStatic(request, response) {
     return;
   }
 
+  if (resolvedPath.startsWith(dataDir)) {
+    response.writeHead(403);
+    response.end('Forbidden');
+    return;
+  }
+
   fs.readFile(resolvedPath, (error, content) => {
     if (error) {
       response.writeHead(404);
@@ -1536,7 +1768,7 @@ function serveStatic(request, response) {
 const server = http.createServer((request, response) => {
   if (request.method === 'OPTIONS') {
     response.writeHead(204, {
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Key',
       'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
       'Access-Control-Allow-Origin': '*'
     });
@@ -1544,9 +1776,30 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (request.method === 'GET' && request.url === '/api/purchase-requests') {
+    if (!requireAdminKey(request, response)) return;
     sendJson(response, 200, {
       requests: readPurchaseRequests()
     });
+    return;
+  }
+  if (request.url === '/api/admin/clients' && ['GET', 'POST'].includes(request.method)) {
+    handleAdminClients(request, response);
+    return;
+  }
+  if (request.method === 'DELETE' && request.url.startsWith('/api/admin/clients/')) {
+    handleDeleteAdminClient(request, response);
+    return;
+  }
+  if (request.url.startsWith('/api/admin/usdt-orders') && ['GET', 'POST'].includes(request.method)) {
+    handleAdminUsdtOrders(request, response);
+    return;
+  }
+  if (request.method === 'DELETE' && request.url.startsWith('/api/admin/usdt-orders/')) {
+    handleDeleteAdminUsdtOrder(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url.startsWith('/api/admin/reports')) {
+    handleAdminReports(request, response);
     return;
   }
   if (request.method === 'GET' && request.url.startsWith('/api/market-data')) {
@@ -1622,6 +1875,7 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (request.method === 'DELETE' && request.url.startsWith('/api/purchase-requests/')) {
+    if (!requireAdminKey(request, response)) return;
     const referenceId = decodeURIComponent(request.url.split('/').pop() || '');
     if (!referenceId) {
       sendJson(response, 400, { error: 'Reference ID is required.' });
@@ -1635,6 +1889,7 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (request.method === 'PATCH' && request.url.startsWith('/api/purchase-requests/')) {
+    if (!requireAdminKey(request, response)) return;
     const referenceId = decodeURIComponent(request.url.split('/').pop() || '');
     readRequestBody(request)
       .then((bodyText) => {
