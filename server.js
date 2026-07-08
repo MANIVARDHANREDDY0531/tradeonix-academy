@@ -2043,5 +2043,5 @@ const server = http.createServer((request, response) => {
 });
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`TRADEONIX preview and backend running on port ${port}`);
+  console.log(`TRADEONIX preview and backend running on port ${port} | persistent-data-ready 2026-07-09`);
 });
