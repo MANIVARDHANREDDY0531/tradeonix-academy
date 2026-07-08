@@ -681,6 +681,62 @@ td a {
   color: var(--gold);
 }
 
+.storage-status {
+  display: grid;
+  gap: 18px;
+}
+
+.storage-banner {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(244, 213, 111, .22);
+  border-radius: 18px;
+  padding: 18px;
+  background: rgba(255, 255, 255, .04);
+}
+
+.storage-banner.safe {
+  border-color: rgba(83, 214, 138, .36);
+  background: rgba(83, 214, 138, .11);
+}
+
+.storage-banner.danger {
+  border-color: rgba(255, 133, 102, .42);
+  background: rgba(255, 133, 102, .1);
+}
+
+.storage-banner strong {
+  color: var(--gold);
+  font-size: 20px;
+  text-transform: uppercase;
+}
+
+.storage-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.storage-grid article {
+  border: 1px solid rgba(244, 213, 111, .18);
+  border-radius: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, .035);
+}
+
+.storage-grid span,
+.storage-grid small,
+.storage-note {
+  color: var(--muted);
+}
+
+.storage-grid strong {
+  display: block;
+  margin: 8px 0;
+  color: var(--text);
+  font-size: 28px;
+}
+
 @keyframes liftIn {
   from {
     opacity: 0;
@@ -695,6 +751,7 @@ td a {
 @media (max-width: 1000px) {
   .summary-grid,
   .cards-grid,
+  .storage-grid,
   .report-grid {
     grid-template-columns: 1fr 1fr;
   }
@@ -732,6 +789,7 @@ td a {
 
   .summary-grid,
   .cards-grid,
+  .storage-grid,
   .report-grid,
   .admin-form,
   .client-card dl {

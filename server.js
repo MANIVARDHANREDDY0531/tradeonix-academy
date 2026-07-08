@@ -825,6 +825,67 @@ function writeJsonStore(filePath, records) {
   fs.writeFileSync(filePath, JSON.stringify(records, null, 2), 'utf8');
 }
 
+function fileSummary(filePath) {
+  if (!fs.existsSync(filePath)) return { exists: false, bytes: 0, updatedAt: '' };
+  const stats = fs.statSync(filePath);
+  return {
+    exists: true,
+    bytes: stats.size,
+    updatedAt: stats.mtime.toISOString()
+  };
+}
+
+function getStorageStatus() {
+  const isPersistent = path.resolve(dataDir) !== path.resolve(bundledDataDir);
+  return {
+    ok: isPersistent,
+    mode: isPersistent ? 'persistent' : 'upload-folder',
+    message: isPersistent
+      ? 'Database is using persistent storage.'
+      : 'Database is using the uploaded website folder. Add DATA_DIR=/data and a Railway volume before storing real data.',
+    counts: {
+      clients: readJsonStore(clientsPath).length,
+      usdtOrders: readJsonStore(usdtOrdersPath).length,
+      purchaseRequests: readPurchaseRequests().length,
+      users: readJsonStore(usersPath).length,
+      journalEntries: readJsonStore(journalsPath).length
+    },
+    files: {
+      clients: fileSummary(clientsPath),
+      usdtOrders: fileSummary(usdtOrdersPath),
+      purchaseRequests: fileSummary(requestLog),
+      users: fileSummary(usersPath),
+      journalEntries: fileSummary(journalsPath)
+    }
+  };
+}
+
+function handleAdminStorage(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  sendJson(response, 200, getStorageStatus());
+}
+
+function handleAdminExport(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const backup = {
+    exportedAt: new Date().toISOString(),
+    storage: getStorageStatus(),
+    purchaseRequests: readPurchaseRequests(),
+    clients: readJsonStore(clientsPath),
+    usdtOrders: readJsonStore(usdtOrdersPath),
+    users: readJsonStore(usersPath),
+    journalEntries: readJsonStore(journalsPath)
+  };
+  response.writeHead(200, {
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Key',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+    'Access-Control-Allow-Origin': '*',
+    'Content-Disposition': `attachment; filename="tradeonix-admin-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+    'Content-Type': 'application/json; charset=utf-8'
+  });
+  response.end(JSON.stringify(backup, null, 2));
+}
+
 function isAdminKeyRequest(request) {
   const key = clean(request.headers['x-admin-key']);
   return key && safeCompare(key, adminAccessKey);
@@ -1926,6 +1987,14 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url.startsWith('/api/admin/reports')) {
     handleAdminReports(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/api/admin/storage') {
+    handleAdminStorage(request, response);
+    return;
+  }
+  if (request.method === 'GET' && request.url === '/api/admin/export') {
+    handleAdminExport(request, response);
     return;
   }
   if (request.method === 'GET' && request.url.startsWith('/api/market-data')) {

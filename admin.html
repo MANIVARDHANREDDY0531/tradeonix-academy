@@ -50,6 +50,7 @@
         <button data-tab="orders" type="button">USDT Orders</button>
         <button data-tab="profits" type="button">Profit Records</button>
         <button data-tab="reports" type="button">Reports</button>
+        <button data-tab="storage" type="button">Storage</button>
       </nav>
 
       <p class="global-status" id="statusText">Ready.</p>
@@ -128,8 +129,16 @@
           <article><h3>Yearly Report</h3><div id="yearlyReport"></div></article>
         </div>
       </section>
+
+      <section class="admin-section" id="storageSection">
+        <div class="panel-head">
+          <div><h2>Storage Safety</h2><p>Check whether records are saving in Railway persistent storage and download backups.</p></div>
+          <button id="downloadBackupButton" type="button">Download backup</button>
+        </div>
+        <div class="storage-status" id="storageStatus">Storage check will appear after refresh.</div>
+      </section>
     </div>
   </main>
-  <script src="admin.js?v=6"></script>
+  <script src="admin.js?v=7"></script>
 </body>
 </html>

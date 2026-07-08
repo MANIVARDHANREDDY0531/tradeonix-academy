@@ -23,13 +23,16 @@ const orderSearch = document.querySelector('#orderSearch');
 const profitRows = document.querySelector('#profitRows');
 const monthlyReport = document.querySelector('#monthlyReport');
 const yearlyReport = document.querySelector('#yearlyReport');
+const storageStatus = document.querySelector('#storageStatus');
+const downloadBackupButton = document.querySelector('#downloadBackupButton');
 const tabButtons = document.querySelectorAll('.admin-tabs button');
 const sections = {
   requests: document.querySelector('#requestsSection'),
   clients: document.querySelector('#clientsSection'),
   orders: document.querySelector('#ordersSection'),
   profits: document.querySelector('#profitsSection'),
-  reports: document.querySelector('#reportsSection')
+  reports: document.querySelector('#reportsSection'),
+  storage: document.querySelector('#storageSection')
 };
 
 const storageKey = 'tradeonixAdminKeyword';
@@ -38,7 +41,8 @@ let state = {
   requests: [],
   clients: [],
   orders: [],
-  reports: { monthly: [], yearly: [] }
+  reports: { monthly: [], yearly: [] },
+  storage: null
 };
 
 function showLogin(message = '') {
@@ -310,6 +314,30 @@ function renderReports() {
   yearlyReport.innerHTML = reportRows(state.reports.yearly);
 }
 
+function renderStorage() {
+  if (!storageStatus) return;
+  if (!state.storage) {
+    storageStatus.innerHTML = '<p>Storage check not loaded yet.</p>';
+    return;
+  }
+  const statusClass = state.storage.ok ? 'safe' : 'danger';
+  const files = state.storage.files || {};
+  const counts = state.storage.counts || {};
+  storageStatus.innerHTML = `
+    <div class="storage-banner ${statusClass}">
+      <strong>${escapeHtml(state.storage.mode || 'unknown')}</strong>
+      <span>${escapeHtml(state.storage.message || '')}</span>
+    </div>
+    <div class="storage-grid">
+      <article><span>Clients</span><strong>${counts.clients || 0}</strong><small>${files.clients?.bytes || 0} bytes</small></article>
+      <article><span>USDT orders</span><strong>${counts.usdtOrders || 0}</strong><small>${files.usdtOrders?.bytes || 0} bytes</small></article>
+      <article><span>Purchase requests</span><strong>${counts.purchaseRequests || 0}</strong><small>${files.purchaseRequests?.bytes || 0} bytes</small></article>
+      <article><span>Journal entries</span><strong>${counts.journalEntries || 0}</strong><small>${files.journalEntries?.bytes || 0} bytes</small></article>
+    </div>
+    <p class="storage-note">After adding one test client, redeploy once. If the count stays after redeploy, the database is safe.</p>
+  `;
+}
+
 function renderAll() {
   renderSummary();
   renderRequests();
@@ -317,6 +345,7 @@ function renderAll() {
   renderOrders();
   renderProfits();
   renderReports();
+  renderStorage();
 }
 
 async function loadOrders(search = '') {
@@ -333,16 +362,18 @@ async function loadAll() {
   refreshButton.disabled = true;
   setStatus('Loading secure admin database...');
   try {
-    const [requestsData, clientsData, ordersData, reportsData] = await Promise.all([
+    const [requestsData, clientsData, ordersData, reportsData, storageData] = await Promise.all([
       apiFetch('/api/purchase-requests'),
       apiFetch('/api/admin/clients'),
       apiFetch('/api/admin/usdt-orders'),
-      apiFetch('/api/admin/reports')
+      apiFetch('/api/admin/reports'),
+      apiFetch('/api/admin/storage')
     ]);
     state.requests = requestsData.requests || [];
     state.clients = clientsData.clients || [];
     state.orders = ordersData.orders || [];
     state.reports = reportsData.reports || reportsData || { monthly: [], yearly: [] };
+    state.storage = storageData;
     renderAll();
     setStatus(`Loaded ${state.clients.length} clients, ${state.orders.length} USDT orders, and ${state.requests.length} purchase requests.`);
   } catch (error) {
@@ -575,6 +606,34 @@ orderSearch.addEventListener('input', () => {
     }
   }, 300);
 });
+
+if (downloadBackupButton) {
+  downloadBackupButton.addEventListener('click', async () => {
+    downloadBackupButton.disabled = true;
+    setStatus('Preparing admin backup...');
+    try {
+      const response = await fetch('/api/admin/export', {
+        cache: 'no-store',
+        headers: getAdminHeaders()
+      });
+      if (!response.ok) throw new Error('Could not download backup.');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `tradeonix-admin-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setStatus('Backup downloaded.');
+    } catch (error) {
+      setStatus(error.message || 'Could not download backup.');
+    } finally {
+      downloadBackupButton.disabled = false;
+    }
+  });
+}
 
 if (adminKey) {
   loadAll();
