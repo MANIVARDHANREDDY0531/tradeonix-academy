@@ -5,7 +5,12 @@ const path = require('path');
 const crypto = require('crypto');
 
 const root = __dirname;
-const dataDir = path.join(root, 'data');
+const bundledDataDir = path.join(root, 'data');
+
+loadEnv();
+
+const configuredDataDir = (process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '').trim();
+const dataDir = configuredDataDir ? path.resolve(configuredDataDir) : bundledDataDir;
 const requestLog = path.join(dataDir, 'purchase-requests.jsonl');
 const usersPath = path.join(dataDir, 'users.json');
 const sessionsPath = path.join(dataDir, 'sessions.json');
@@ -16,7 +21,7 @@ const usdtOrdersPath = path.join(dataDir, 'usdt-orders.json');
 const couponsPath = path.join(root, 'coupons.json');
 const port = Number(process.env.PORT || 8766);
 
-loadEnv();
+seedPersistentDataDir();
 
 const razorpayKeyId = process.env.RAZORPAY_KEY_ID || '';
 const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || '';
@@ -665,6 +670,27 @@ function loadEnv() {
     });
 }
 
+function seedPersistentDataDir() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  if (path.resolve(dataDir) === path.resolve(bundledDataDir)) return;
+  if (!fs.existsSync(bundledDataDir)) return;
+
+  [
+    'purchase-requests.jsonl',
+    'users.json',
+    'sessions.json',
+    'journal-entries.json',
+    'auth-otps.json',
+    'clients.json',
+    'usdt-orders.json'
+  ].forEach((fileName) => {
+    const sourcePath = path.join(bundledDataDir, fileName);
+    const targetPath = path.join(dataDir, fileName);
+    if (!fs.existsSync(sourcePath) || fs.existsSync(targetPath)) return;
+    fs.copyFileSync(sourcePath, targetPath);
+  });
+}
+
 function readRequestBody(request) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -872,12 +898,18 @@ function getOrderProfitUsdt(order) {
   return toNumber(order.profit);
 }
 
+function getOrderTimestamp(order) {
+  if (order.transactionAt) return order.transactionAt;
+  if (order.orderDate && order.orderTime) return `${order.orderDate}T${order.orderTime}:00`;
+  return order.orderDate || order.createdAt;
+}
+
 function buildReports(orders) {
   const makeBucket = () => ({ buyOrders: 0, sellOrders: 0, usdtBoughtByClients: 0, usdtSoldByClients: 0, usdtPurchasedFromSellers: 0, usdtProfit: 0, revenue: 0, profit: 0, estimatedProfitInr: 0, orders: 0 });
   const monthly = {};
   const yearly = {};
   for (const order of orders) {
-    const date = new Date(order.orderDate || order.createdAt);
+    const date = new Date(getOrderTimestamp(order));
     if (Number.isNaN(date.getTime())) continue;
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const yearKey = String(date.getFullYear());
@@ -1319,12 +1351,16 @@ async function handleAdminUsdtOrders(request, response) {
     }
 
     const now = new Date().toISOString();
+    const orderDate = clean(body.orderDate) || now.slice(0, 10);
+    const orderTime = clean(body.orderTime);
     const order = {
       orderId: `USDT-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(2).toString('hex').toUpperCase()}`,
       clientId,
       clientName: getClientName(clientId),
       orderSide,
-      orderDate: clean(body.orderDate) || now.slice(0, 10),
+      orderDate,
+      orderTime,
+      transactionAt: orderTime ? `${orderDate}T${orderTime}:00` : orderDate,
       paymentMethod: clean(body.paymentMethod),
       bankTransactionId: clean(body.bankTransactionId),
       sellerAccountPaidTo: clean(body.sellerAccountPaidTo),
@@ -1341,6 +1377,56 @@ async function handleAdminUsdtOrders(request, response) {
     sendJson(response, 201, { ok: true, order });
   } catch (error) {
     sendJson(response, 400, { error: 'Could not save USDT order.' });
+  }
+}
+
+async function handleUpdateAdminUsdtOrder(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const orderId = decodeURIComponent(request.url.split('/').pop() || '');
+  const orders = readJsonStore(usdtOrdersPath);
+  const existingIndex = orders.findIndex((order) => order.orderId === orderId);
+  if (existingIndex === -1) return sendJson(response, 404, { error: 'Order not found.' });
+
+  try {
+    const body = JSON.parse(await readRequestBody(request) || '{}');
+    const existing = orders[existingIndex];
+    const clientId = clean(body.clientId) || existing.clientId;
+    const orderSide = clean(body.orderSide) || existing.orderSide;
+    if (!clientId) return sendJson(response, 400, { error: 'Select a client.' });
+    if (!['client_buy_usdt', 'client_sell_usdt'].includes(orderSide)) return sendJson(response, 400, { error: 'Select buy/sell order type.' });
+
+    const calculated = calculateUsdtOrder({ ...existing, ...body, clientId, orderSide });
+    if (calculated.quantity <= 0) return sendJson(response, 400, { error: 'USDT quantity is required.' });
+    if (orderSide === 'client_buy_usdt' && (!calculated.buyPrice || !calculated.sellPrice)) {
+      return sendJson(response, 400, { error: 'Buy price and sell price are required to calculate profit.' });
+    }
+
+    const now = new Date().toISOString();
+    const orderDate = clean(body.orderDate) || existing.orderDate || now.slice(0, 10);
+    const orderTime = clean(body.orderTime);
+    const updatedOrder = {
+      ...existing,
+      clientId,
+      clientName: getClientName(clientId) || existing.clientName,
+      orderSide,
+      orderDate,
+      orderTime,
+      transactionAt: orderTime ? `${orderDate}T${orderTime}:00` : orderDate,
+      paymentMethod: clean(body.paymentMethod),
+      bankTransactionId: clean(body.bankTransactionId),
+      sellerAccountPaidTo: clean(body.sellerAccountPaidTo),
+      sellerPaymentMethod: clean(body.sellerPaymentMethod),
+      sellerBankTransactionId: clean(body.sellerBankTransactionId),
+      status: clean(body.status) || existing.status || 'completed',
+      notes: clean(body.notes),
+      updatedAt: now,
+      ...calculated
+    };
+    orders[existingIndex] = updatedOrder;
+    writeUsdtOrders(orders);
+    sendJson(response, 200, { ok: true, order: updatedOrder });
+  } catch (error) {
+    sendJson(response, 400, { error: 'Could not update USDT order.' });
   }
 }
 
@@ -1781,7 +1867,7 @@ function serveStatic(request, response) {
     return;
   }
 
-  if (resolvedPath.startsWith(dataDir)) {
+  if (resolvedPath.startsWith(path.resolve(dataDir)) || resolvedPath.startsWith(path.resolve(bundledDataDir))) {
     response.writeHead(403);
     response.end('Forbidden');
     return;
@@ -1832,6 +1918,10 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'DELETE' && request.url.startsWith('/api/admin/usdt-orders/')) {
     handleDeleteAdminUsdtOrder(request, response);
+    return;
+  }
+  if (request.method === 'PATCH' && request.url.startsWith('/api/admin/usdt-orders/')) {
+    handleUpdateAdminUsdtOrder(request, response);
     return;
   }
   if (request.method === 'GET' && request.url.startsWith('/api/admin/reports')) {

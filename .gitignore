@@ -1,4 +1,8 @@
 .env
 node_modules/
 data/
+uploads/
+*.db
+*.sqlite
+*.sqlite3
 npm-debug.log*
