@@ -9,7 +9,8 @@ const bundledDataDir = path.join(root, 'data');
 
 loadEnv();
 
-const configuredDataDir = (process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || '').trim();
+const railwayDefaultDataDir = process.env.RAILWAY_ENVIRONMENT && fs.existsSync('/data') ? '/data' : '';
+const configuredDataDir = (process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || railwayDefaultDataDir || '').trim();
 const dataDir = configuredDataDir ? path.resolve(configuredDataDir) : bundledDataDir;
 const requestLog = path.join(dataDir, 'purchase-requests.jsonl');
 const usersPath = path.join(dataDir, 'users.json');

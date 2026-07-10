@@ -24,6 +24,7 @@ const profitRows = document.querySelector('#profitRows');
 const monthlyReport = document.querySelector('#monthlyReport');
 const yearlyReport = document.querySelector('#yearlyReport');
 const storageStatus = document.querySelector('#storageStatus');
+const storageTestButton = document.querySelector('#storageTestButton');
 const downloadBackupButton = document.querySelector('#downloadBackupButton');
 const tabButtons = document.querySelectorAll('.admin-tabs button');
 const sections = {
@@ -323,18 +324,22 @@ function renderStorage() {
   const statusClass = state.storage.ok ? 'safe' : 'danger';
   const files = state.storage.files || {};
   const counts = state.storage.counts || {};
+  const writeTest = state.storage.writeTest || {};
   storageStatus.innerHTML = `
     <div class="storage-banner ${statusClass}">
       <strong>${escapeHtml(state.storage.mode || 'unknown')}</strong>
       <span>${escapeHtml(state.storage.message || '')}</span>
+      <small>DATA_DIR detected: ${state.storage.configured ? 'Yes' : 'No'}${state.storage.configuredDataDir ? ` (${escapeHtml(state.storage.configuredDataDir)})` : ''}</small>
     </div>
     <div class="storage-grid">
       <article><span>Clients</span><strong>${counts.clients || 0}</strong><small>${files.clients?.bytes || 0} bytes</small></article>
       <article><span>USDT orders</span><strong>${counts.usdtOrders || 0}</strong><small>${files.usdtOrders?.bytes || 0} bytes</small></article>
       <article><span>Purchase requests</span><strong>${counts.purchaseRequests || 0}</strong><small>${files.purchaseRequests?.bytes || 0} bytes</small></article>
+      <article><span>Journal users</span><strong>${counts.users || 0}</strong><small>${files.users?.bytes || 0} bytes</small></article>
       <article><span>Journal entries</span><strong>${counts.journalEntries || 0}</strong><small>${files.journalEntries?.bytes || 0} bytes</small></article>
+      <article><span>Write test</span><strong>${writeTest.writes || 0}</strong><small>${escapeHtml(writeTest.testId || 'Not tested yet')}</small></article>
     </div>
-    <p class="storage-note">After adding one test client, redeploy once. If the count stays after redeploy, the database is safe.</p>
+    <p class="storage-note">Click Write storage test, redeploy once, then refresh. If the same test count stays, Railway storage is working.</p>
   `;
 }
 
@@ -631,6 +636,23 @@ if (downloadBackupButton) {
       setStatus(error.message || 'Could not download backup.');
     } finally {
       downloadBackupButton.disabled = false;
+    }
+  });
+}
+
+if (storageTestButton) {
+  storageTestButton.addEventListener('click', async () => {
+    storageTestButton.disabled = true;
+    setStatus('Writing storage test...');
+    try {
+      const data = await apiFetch('/api/admin/storage-test', { method: 'POST' });
+      state.storage = data.storage;
+      renderStorage();
+      setStatus('Storage test written. Redeploy once, then refresh this tab to confirm it stays.');
+    } catch (error) {
+      setStatus(error.message || 'Could not write storage test.');
+    } finally {
+      storageTestButton.disabled = false;
     }
   });
 }
