@@ -18,6 +18,7 @@ const journalsPath = path.join(dataDir, 'journal-entries.json');
 const otpStorePath = path.join(dataDir, 'auth-otps.json');
 const clientsPath = path.join(dataDir, 'clients.json');
 const usdtOrdersPath = path.join(dataDir, 'usdt-orders.json');
+const storageProbePath = path.join(dataDir, 'storage-health.json');
 const couponsPath = path.join(root, 'coupons.json');
 const port = Number(process.env.PORT || 8766);
 
@@ -837,9 +838,14 @@ function fileSummary(filePath) {
 
 function getStorageStatus() {
   const isPersistent = path.resolve(dataDir) !== path.resolve(bundledDataDir);
+  const probe = readJsonStore(storageProbePath, [])[0] || null;
   return {
     ok: isPersistent,
     mode: isPersistent ? 'persistent' : 'upload-folder',
+    configured: Boolean(configuredDataDir),
+    dataDir,
+    configuredDataDir,
+    railwayVolumeVariableFound: Boolean(process.env.RAILWAY_VOLUME_MOUNT_PATH),
     message: isPersistent
       ? 'Database is using persistent storage.'
       : 'Database is using the uploaded website folder. Add DATA_DIR=/data and a Railway volume before storing real data.',
@@ -850,12 +856,14 @@ function getStorageStatus() {
       users: readJsonStore(usersPath).length,
       journalEntries: readJsonStore(journalsPath).length
     },
+    writeTest: probe,
     files: {
       clients: fileSummary(clientsPath),
       usdtOrders: fileSummary(usdtOrdersPath),
       purchaseRequests: fileSummary(requestLog),
       users: fileSummary(usersPath),
-      journalEntries: fileSummary(journalsPath)
+      journalEntries: fileSummary(journalsPath),
+      writeTest: fileSummary(storageProbePath)
     }
   };
 }
@@ -863,6 +871,18 @@ function getStorageStatus() {
 function handleAdminStorage(request, response) {
   if (!requireAdminKey(request, response)) return;
   sendJson(response, 200, getStorageStatus());
+}
+
+function handleAdminStorageTest(request, response) {
+  if (!requireAdminKey(request, response)) return;
+  const previous = readJsonStore(storageProbePath, [])[0] || {};
+  const next = {
+    testId: `STORAGE-${Date.now().toString(36).toUpperCase()}`,
+    writes: Number(previous.writes || 0) + 1,
+    lastWrittenAt: new Date().toISOString()
+  };
+  writeJsonStore(storageProbePath, [next]);
+  sendJson(response, 200, { ok: true, writeTest: next, storage: getStorageStatus() });
 }
 
 function handleAdminExport(request, response) {
@@ -1027,6 +1047,17 @@ function verifyPassword(password, storedHash) {
   return safeCompare(actual, expected);
 }
 
+function normalizePassword(value) {
+  return String(value || '').trim();
+}
+
+function passwordMatches(input, storedHash) {
+  const rawPassword = String(input || '');
+  const trimmedPassword = normalizePassword(rawPassword);
+  return verifyPassword(trimmedPassword, storedHash)
+    || (rawPassword !== trimmedPassword && verifyPassword(rawPassword, storedHash));
+}
+
 function createSession(userId) {
   const sessions = readJsonStore(sessionsPath);
   const token = crypto.randomBytes(32).toString('hex');
@@ -1151,7 +1182,7 @@ async function handleRequestSignupOtp(request, response) {
     const body = JSON.parse(await readRequestBody(request) || '{}');
     const name = clean(body.name);
     const email = clean(body.email).toLowerCase();
-    const password = String(body.password || '');
+    const password = normalizePassword(body.password);
     if (name.length < 2) return sendJson(response, 400, { error: 'Please enter your full name.' });
     if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
     if (password.length < 8) return sendJson(response, 400, { error: 'Password must be at least 8 characters.' });
@@ -1228,34 +1259,33 @@ async function handleRequestPasswordReset(request, response) {
     if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
 
     const user = readJsonStore(usersPath).find((item) => item.email === email);
+    if (!user) return sendJson(response, 404, { error: 'No account exists with this email. Please sign up first.' });
     const existing = findOtpRecord(email, 'reset');
     if (existing && Date.parse(existing.nextAllowedAt || '') > Date.now()) {
       return sendJson(response, 429, { error: 'Please wait one minute before requesting another OTP.' });
     }
 
-    if (user) {
-      const otp = generateOtp();
-      const otpRecord = {
-        id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
-        purpose: 'reset',
-        name: user.name,
-        email,
-        otpHash: hashOtp(email, 'reset', otp),
-        attempts: 0,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-        nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
-      };
-      try {
-        await sendEmail(email, 'Your TRADEONIX password reset OTP', buildOtpMessage(user.name, otp, 'reset'));
-      } catch (emailError) {
-        console.warn(`Password reset OTP email failed for ${email}: ${emailError.message}`);
-        return sendJson(response, 502, { error: getEmailSetupError(emailError) });
-      }
-      saveOtpRecord(otpRecord);
+    const otp = generateOtp();
+    const otpRecord = {
+      id: `OTP-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`,
+      purpose: 'reset',
+      name: user.name,
+      email,
+      otpHash: hashOtp(email, 'reset', otp),
+      attempts: 0,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+      nextAllowedAt: new Date(Date.now() + 60 * 1000).toISOString()
+    };
+    try {
+      await sendEmail(email, 'Your TRADEONIX password reset OTP', buildOtpMessage(user.name, otp, 'reset'));
+    } catch (emailError) {
+      console.warn(`Password reset OTP email failed for ${email}: ${emailError.message}`);
+      return sendJson(response, 502, { error: getEmailSetupError(emailError) });
     }
+    saveOtpRecord(otpRecord);
 
-    sendJson(response, 200, { ok: true, message: 'If this email exists, a reset OTP has been sent.' });
+    sendJson(response, 200, { ok: true, message: 'Reset OTP sent to your email.' });
   } catch (error) {
     sendJson(response, 400, { error: error.message || 'Could not send reset OTP. Please try again.' });
   }
@@ -1266,7 +1296,7 @@ async function handleResetPassword(request, response) {
     const body = JSON.parse(await readRequestBody(request) || '{}');
     const email = clean(body.email).toLowerCase();
     const otp = clean(body.otp);
-    const password = String(body.password || '');
+    const password = normalizePassword(body.password);
     if (!isValidEmail(email)) return sendJson(response, 400, { error: 'Please enter a valid email address.' });
     if (!/^\d{6}$/.test(otp)) return sendJson(response, 400, { error: 'Please enter the 6 digit OTP.' });
     if (password.length < 8) return sendJson(response, 400, { error: 'Password must be at least 8 characters.' });
@@ -1295,10 +1325,13 @@ async function handleLogin(request, response) {
   try {
     const body = JSON.parse(await readRequestBody(request) || '{}');
     const email = clean(body.email).toLowerCase();
-    const password = String(body.password || '');
+    const password = body.password;
     const user = readJsonStore(usersPath).find((item) => item.email === email);
-    if (!user || !verifyPassword(password, user.passwordHash)) {
-      return sendJson(response, 401, { error: 'Email or password is incorrect.' });
+    if (!user) {
+      return sendJson(response, 404, { error: 'No account found with this email. Please sign up first.' });
+    }
+    if (!passwordMatches(password, user.passwordHash)) {
+      return sendJson(response, 401, { error: 'Password is incorrect. Please try again or use forgot password.' });
     }
     const token = createSession(user.id);
     sendJson(response, 200, { ok: true, token, user: publicUser(user) });
@@ -1991,6 +2024,10 @@ const server = http.createServer((request, response) => {
   }
   if (request.method === 'GET' && request.url === '/api/admin/storage') {
     handleAdminStorage(request, response);
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/admin/storage-test') {
+    handleAdminStorageTest(request, response);
     return;
   }
   if (request.method === 'GET' && request.url === '/api/admin/export') {

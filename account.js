@@ -6,6 +6,7 @@ const authStatus = document.getElementById('authStatus');
 const journalStatus = document.getElementById('journalStatus');
 const nameField = document.getElementById('nameField');
 const otpField = document.getElementById('otpField');
+const confirmPasswordField = document.getElementById('confirmPasswordField');
 const forgotPasswordButton = document.getElementById('forgotPasswordButton');
 const backToLoginButton = document.getElementById('backToLoginButton');
 const welcomeText = document.getElementById('welcomeText');
@@ -27,6 +28,24 @@ function setStatus(element, message, isError = false) {
   element.style.color = isError ? '#ff8a75' : '#ffeaa2';
 }
 
+function normalizePassword(value) {
+  return String(value || '').trim();
+}
+
+function setBusy(container, button, busy, message = 'Please wait...') {
+  container.classList.toggle('is-loading', busy);
+  if (!button) return;
+  if (busy) {
+    button.dataset.originalHtml = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = `<span class="button-loader" aria-hidden="true"></span>${message}`;
+    return;
+  }
+  button.disabled = false;
+  if (button.dataset.originalHtml) button.innerHTML = button.dataset.originalHtml;
+  delete button.dataset.originalHtml;
+}
+
 function authHeaders() {
   return sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {};
 }
@@ -46,9 +65,23 @@ async function api(path, options = {}) {
 }
 
 function updateRequiredFields() {
+  const needsConfirmPassword = authMode === 'signup' || authMode === 'reset-password';
   authForm.elements.name.required = authMode === 'signup';
   authForm.elements.otp.required = authMode === 'verify-signup' || authMode === 'reset-password';
   authForm.elements.password.required = authMode !== 'forgot';
+  authForm.elements.confirmPassword.required = needsConfirmPassword;
+}
+
+function applyAuthButtonLabel() {
+  const button = authForm.querySelector('.primary-action');
+  const labels = {
+    login: 'Login to journal <span>&rarr;</span>',
+    signup: 'Send signup OTP <span>&rarr;</span>',
+    'verify-signup': 'Verify OTP & create account <span>&rarr;</span>',
+    forgot: 'Send reset OTP <span>&rarr;</span>',
+    'reset-password': 'Reset password <span>&rarr;</span>'
+  };
+  button.innerHTML = labels[authMode] || labels.login;
 }
 
 function setAuthMode(mode) {
@@ -59,6 +92,7 @@ function setAuthMode(mode) {
 
   nameField.classList.toggle('hidden', mode !== 'signup');
   otpField.classList.toggle('hidden', mode !== 'verify-signup' && mode !== 'reset-password');
+  confirmPasswordField.classList.toggle('hidden', mode !== 'signup' && mode !== 'reset-password');
   forgotPasswordButton.classList.toggle('hidden', mode !== 'login');
   backToLoginButton.classList.toggle('hidden', mode === 'login');
 
@@ -66,19 +100,12 @@ function setAuthMode(mode) {
   passwordLabel.classList.toggle('hidden', mode === 'forgot');
   authForm.elements.password.autocomplete = mode === 'login' ? 'current-password' : 'new-password';
   authForm.elements.password.placeholder = mode === 'reset-password' ? 'Enter new password' : '';
+  authForm.elements.confirmPassword.placeholder = mode === 'reset-password' ? 'Confirm new password' : '';
 
   const emailInput = authForm.elements.email;
   emailInput.readOnly = mode === 'verify-signup' || mode === 'reset-password';
 
-  const button = authForm.querySelector('.primary-action');
-  const labels = {
-    login: 'Login to journal <span>&rarr;</span>',
-    signup: 'Send signup OTP <span>&rarr;</span>',
-    'verify-signup': 'Verify OTP & create account <span>&rarr;</span>',
-    forgot: 'Send reset OTP <span>&rarr;</span>',
-    'reset-password': 'Reset password <span>&rarr;</span>'
-  };
-  button.innerHTML = labels[mode] || labels.login;
+  applyAuthButtonLabel();
   updateRequiredFields();
   setStatus(authStatus, '');
 }
@@ -149,15 +176,18 @@ function renderEntries(entries) {
 
 async function loadJournal() {
   try {
+    setStatus(journalStatus, 'Loading journal...');
     const data = await api('/api/journal');
     renderStats(data.entries || []);
     renderEntries(data.entries || []);
+    setStatus(journalStatus, '');
   } catch (error) {
     setStatus(journalStatus, error.message, true);
   }
 }
 
 async function completeLogin(payload) {
+  payload.password = normalizePassword(payload.password);
   const data = await api('/api/login', { method: 'POST', body: JSON.stringify(payload) });
   sessionToken = data.token;
   localStorage.setItem('tradeonix_session', sessionToken);
@@ -166,6 +196,7 @@ async function completeLogin(payload) {
 }
 
 async function requestSignupOtp(payload) {
+  payload.password = normalizePassword(payload.password);
   pendingSignup = { name: payload.name, email: payload.email, password: payload.password };
   await api('/api/auth/request-signup-otp', { method: 'POST', body: JSON.stringify(pendingSignup) });
   authForm.elements.otp.value = '';
@@ -193,11 +224,13 @@ async function requestResetOtp(payload) {
   });
   authForm.elements.otp.value = '';
   authForm.elements.password.value = '';
+  authForm.elements.confirmPassword.value = '';
   setAuthMode('reset-password');
-  setStatus(authStatus, 'If this email exists, reset OTP has been sent.');
+  setStatus(authStatus, 'Reset OTP sent. Check your email and enter the 6 digit code.');
 }
 
 async function resetPassword(payload) {
+  payload.password = normalizePassword(payload.password);
   await api('/api/auth/reset-password', {
     method: 'POST',
     body: JSON.stringify({ email: resetEmail || payload.email, otp: payload.otp, password: payload.password })
@@ -234,11 +267,25 @@ backToLoginButton.addEventListener('click', () => {
 
 authForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  setStatus(authStatus, 'Please wait...');
+  const button = authForm.querySelector('.primary-action');
   const payload = Object.fromEntries(new FormData(authForm).entries());
   payload.email = String(payload.email || '').toLowerCase().trim();
   payload.otp = String(payload.otp || '').trim();
+  payload.password = normalizePassword(payload.password);
+  payload.confirmPassword = normalizePassword(payload.confirmPassword);
+  const busyLabels = {
+    login: 'Opening journal...',
+    signup: 'Sending OTP...',
+    'verify-signup': 'Verifying OTP...',
+    forgot: 'Sending reset OTP...',
+    'reset-password': 'Updating password...'
+  };
   try {
+    if ((authMode === 'signup' || authMode === 'reset-password') && payload.password !== payload.confirmPassword) {
+      throw new Error('Password and confirm password do not match.');
+    }
+    setStatus(authStatus, busyLabels[authMode] || 'Please wait...');
+    setBusy(authForm, button, true, busyLabels[authMode]);
     if (authMode === 'login') await completeLogin(payload);
     if (authMode === 'signup') await requestSignupOtp(payload);
     if (authMode === 'verify-signup') await verifySignupOtp(payload);
@@ -246,12 +293,17 @@ authForm.addEventListener('submit', async (event) => {
     if (authMode === 'reset-password') await resetPassword(payload);
   } catch (error) {
     setStatus(authStatus, error.message, true);
+  } finally {
+    setBusy(authForm, button, false);
+    applyAuthButtonLabel();
   }
 });
 
 journalForm.addEventListener('submit', async (event) => {
   event.preventDefault();
+  const button = journalForm.querySelector('.primary-action');
   setStatus(journalStatus, 'Saving trade...');
+  setBusy(journalForm, button, true, 'Saving trade...');
   try {
     const payload = Object.fromEntries(new FormData(journalForm).entries());
     await api('/api/journal', { method: 'POST', body: JSON.stringify(payload) });
@@ -261,6 +313,8 @@ journalForm.addEventListener('submit', async (event) => {
     loadJournal();
   } catch (error) {
     setStatus(journalStatus, error.message, true);
+  } finally {
+    setBusy(journalForm, button, false);
   }
 });
 
