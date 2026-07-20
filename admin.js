@@ -1,664 +1,394 @@
-const adminLoginPanel = document.querySelector('#adminLoginPanel');
-const adminLoginForm = document.querySelector('#adminLoginForm');
-const adminKeyword = document.querySelector('#adminKeyword');
-const adminContent = document.querySelector('#adminContent');
-const loginStatus = document.querySelector('#loginStatus');
-const refreshButton = document.querySelector('#refreshButton');
-const logoutButton = document.querySelector('#logoutButton');
-const statusText = document.querySelector('#statusText');
-const totalClients = document.querySelector('#totalClients');
-const totalOrders = document.querySelector('#totalOrders');
-const totalProfit = document.querySelector('#totalProfit');
-const totalRequests = document.querySelector('#totalRequests');
-const requestRows = document.querySelector('#requestRows');
-const clientForm = document.querySelector('#clientForm');
-const clientCards = document.querySelector('#clientCards');
-const orderForm = document.querySelector('#orderForm');
-const editOrderId = document.querySelector('#editOrderId');
-const orderSubmitButton = document.querySelector('#orderSubmitButton');
-const cancelEditOrder = document.querySelector('#cancelEditOrder');
-const orderClientSelect = document.querySelector('#orderClientSelect');
-const orderRows = document.querySelector('#orderRows');
-const orderSearch = document.querySelector('#orderSearch');
-const profitRows = document.querySelector('#profitRows');
-const monthlyReport = document.querySelector('#monthlyReport');
-const yearlyReport = document.querySelector('#yearlyReport');
-const storageStatus = document.querySelector('#storageStatus');
-const storageTestButton = document.querySelector('#storageTestButton');
-const downloadBackupButton = document.querySelector('#downloadBackupButton');
-const tabButtons = document.querySelectorAll('.admin-tabs button');
-const sections = {
-  requests: document.querySelector('#requestsSection'),
-  clients: document.querySelector('#clientsSection'),
-  orders: document.querySelector('#ordersSection'),
-  profits: document.querySelector('#profitsSection'),
-  reports: document.querySelector('#reportsSection'),
-  storage: document.querySelector('#storageSection')
-};
+const rupees = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 0
+});
 
-const storageKey = 'tradeonixAdminKeyword';
-let adminKey = sessionStorage.getItem(storageKey) || '';
-let state = {
-  requests: [],
-  clients: [],
-  orders: [],
-  reports: { monthly: [], yearly: [] },
-  storage: null
-};
+const productForm = document.querySelector("[data-product-form]");
+const productList = document.querySelector("[data-product-list]");
+const orderList = document.querySelector("[data-order-list]");
+const toast = document.querySelector("[data-toast]");
+const photoUpload = document.querySelector("[data-photo-upload]");
+const uploadPreview = document.querySelector("[data-upload-preview]");
 
-function showLogin(message = '') {
-  adminKey = '';
-  sessionStorage.removeItem(storageKey);
-  adminLoginPanel.hidden = false;
-  adminContent.hidden = true;
-  loginStatus.textContent = message;
-  setTimeout(() => adminKeyword.focus(), 50);
+let products = [];
+let orders = [];
+const liveConfig = window.VASTRAVATHI_LIVE_CONFIG || {};
+const supabaseEnabled = Boolean(liveConfig.supabaseUrl && liveConfig.supabaseAnonKey);
+const cloudinaryEnabled = Boolean(liveConfig.cloudinaryCloudName && liveConfig.cloudinaryUploadPreset);
+const productsTable = liveConfig.productsTable || "products";
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("active");
+  window.clearTimeout(showToast.timer);
+  showToast.timer = window.setTimeout(() => toast.classList.remove("active"), 1800);
 }
 
-function showAdmin() {
-  adminLoginPanel.hidden = true;
-  adminContent.hidden = false;
-}
-
-function getAdminHeaders(extraHeaders = {}) {
-  return {
-    'X-Admin-Key': adminKey,
-    ...extraHeaders
-  };
-}
-
-async function readJsonResponse(response) {
-  const text = await response.text();
-  try {
-    return text ? JSON.parse(text) : {};
-  } catch (error) {
-    return { error: text || 'Request failed.' };
-  }
-}
-
-async function apiFetch(url, options = {}) {
-  const response = await fetch(url, {
-    ...options,
-    cache: 'no-store',
-    headers: getAdminHeaders(options.headers || {})
+async function api(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    ...options
   });
-  const data = await readJsonResponse(response);
   if (response.status === 401) {
-    showLogin('Keyword is wrong.');
-    throw new Error('Admin access required.');
+    window.location.href = "/admin-login.html";
+    throw new Error("Admin login required");
   }
   if (!response.ok) {
-    throw new Error(data.error || 'Request failed.');
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || "Request failed");
   }
-  return data;
+  return response.json();
 }
 
-function escapeHtml(value) {
-  return String(value || '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
+async function supabaseRequest(path, options = {}) {
+  const baseUrl = String(liveConfig.supabaseUrl || "").replace(/\/$/, "");
+  const response = await fetch(`${baseUrl}/rest/v1/${path}`, {
+    ...options,
+    headers: {
+      apikey: liveConfig.supabaseAnonKey,
+      Authorization: `Bearer ${liveConfig.supabaseAnonKey}`,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+      ...(options.headers || {})
+    }
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(body || "Live request failed");
+  }
+
+  if (response.status === 204) return null;
+  return response.json();
 }
 
-function escapeAttr(value) {
-  return escapeHtml(value).replaceAll('`', '&#096;');
+function productId() {
+  return `saree_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function formatAmount(amount) {
-  return `Rs. ${Number(amount || 0).toLocaleString('en-IN', {
-    maximumFractionDigits: 2
-  })}`;
+async function loadProducts() {
+  if (!supabaseEnabled) return api("/api/products");
+  const rows = await supabaseRequest(`${productsTable}?select=id,payload,updated_at&order=updated_at.desc`);
+  return rows.map((row) => row.payload || row).filter((product) => product && product.id);
 }
 
-function formatNumber(value, digits = 2) {
-  return Number(value || 0).toLocaleString('en-IN', {
-    maximumFractionDigits: digits
+async function saveProduct(data) {
+  if (!supabaseEnabled) {
+    const id = data.id;
+    const method = id ? "PUT" : "POST";
+    const path = id ? `/api/products/${id}` : "/api/products";
+    if (!id) delete data.id;
+    return api(path, { method, body: JSON.stringify(data) });
+  }
+
+  const id = data.id || productId();
+  data.id = id;
+  return supabaseRequest(productsTable, {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify({ id, payload: data, updated_at: new Date().toISOString() })
   });
 }
 
-function formatDate(value) {
-  if (!value) return '-';
-  return new Date(value).toLocaleString('en-IN', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
+async function deleteProduct(id) {
+  if (!supabaseEnabled) return api(`/api/products/${id}`, { method: "DELETE" });
+  return supabaseRequest(`${productsTable}?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+async function loadOrders() {
+  if (supabaseEnabled) return [];
+  return api("/api/orders");
+}
+
+async function uploadPhoto(file) {
+  if (cloudinaryEnabled) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", liveConfig.cloudinaryUploadPreset);
+    formData.append("folder", "vastravathi/products");
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${liveConfig.cloudinaryCloudName}/image/upload`, {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error?.message || "Cloudinary upload failed");
+    }
+
+    const body = await response.json();
+    return { url: body.secure_url };
+  }
+
+  const response = await fetch("/api/uploads", {
+    method: "POST",
+    headers: { "Content-Type": file.type || "image/jpeg" },
+    body: file
   });
-}
-
-function formatOrderDateTime(order) {
-  if (order.transactionAt) return formatDate(order.transactionAt);
-  if (order.orderDate && order.orderTime) return `${order.orderDate} ${order.orderTime}`;
-  return formatDate(order.orderDate || order.createdAt);
-}
-
-function setStatus(message) {
-  statusText.textContent = message;
-}
-
-function orderSideLabel(value) {
-  return value === 'client_sell_usdt' ? 'Client sold USDT to us' : 'Client bought USDT from us';
-}
-
-function orderProfitUsdt(order) {
-  if (order.profitUsdt !== undefined) return Number(order.profitUsdt || 0);
-  if (order.estimatedProfitInr !== undefined && Number(order.sellPrice || 0) > 0) {
-    return Number(order.estimatedProfitInr || 0) / Number(order.sellPrice || 1);
+  if (response.status === 401) {
+    window.location.href = "/admin-login.html";
+    throw new Error("Admin login required");
   }
-  if (Number(order.sellPrice || 0) > 0 && Number(order.profit || 0) > 0) {
-    return Number(order.profit || 0) / Number(order.sellPrice || 1);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.error || "Photo upload failed");
   }
-  return Number(order.profit || 0);
+  return response.json();
 }
 
-function getPaymentStatus(item) {
-  if (item.paymentStatus) return item.paymentStatus;
-  if (!Number(item.planPrice || 0)) return 'not_required';
-  return 'pending';
+function updateStats() {
+  const revenue = orders.reduce((sum, order) => sum + Number(order.total || order.subtotal || 0), 0);
+  document.querySelector("[data-product-total]").textContent = products.length;
+  document.querySelector("[data-order-total]").textContent = orders.length;
+  document.querySelector("[data-pending-total]").textContent = orders.filter((order) => order.status === "Pending").length;
+  document.querySelector("[data-revenue-total]").textContent = rupees.format(revenue);
 }
 
-function renderPaymentStatus(referenceId, status) {
-  const options = [
-    ['pending', 'Pending'],
-    ['paid', 'Paid'],
-    ['failed', 'Failed'],
-    ['refunded', 'Refunded'],
-    ['not_required', 'Not required']
-  ];
-  return `
-    <select class="payment-status status-${escapeHtml(status)}" data-reference-id="${escapeHtml(referenceId)}">
-      ${options.map(([value, label]) => `<option value="${value}" ${value === status ? 'selected' : ''}>${label}</option>`).join('')}
-    </select>
-  `;
-}
-
-function renderSummary() {
-  totalClients.textContent = state.clients.length;
-  totalOrders.textContent = state.orders.length;
-  totalRequests.textContent = state.requests.length;
-  const profit = state.orders.reduce((sum, item) => sum + orderProfitUsdt(item), 0);
-  totalProfit.textContent = `${formatNumber(profit, 4)} USDT`;
-}
-
-function renderRequests() {
-  if (!state.requests.length) {
-    requestRows.innerHTML = '<tr><td colspan="9" class="empty">No purchase requests yet.</td></tr>';
+function renderProducts() {
+  if (!products.length) {
+    productList.innerHTML = '<p class="empty-state">No products yet.</p>';
     return;
   }
 
-  requestRows.innerHTML = state.requests.map((item) => `
-    <tr>
-      <td><span class="reference">${escapeHtml(item.referenceId)}</span><small>${escapeHtml(item.status || 'new')}</small></td>
-      <td><strong>${escapeHtml(item.customer?.name)}</strong></td>
-      <td><a href="mailto:${escapeAttr(item.customer?.email)}">${escapeHtml(item.customer?.email)}</a><small>${escapeHtml(item.customer?.phone)}</small></td>
-      <td>${escapeHtml(item.planName)}</td>
-      <td><strong>${formatAmount(item.finalPlanPrice ?? item.planPrice)}</strong>${item.coupon?.code ? `<small>Coupon ${escapeHtml(item.coupon.code)}</small>` : ''}</td>
-      <td>${renderPaymentStatus(item.referenceId, getPaymentStatus(item))}</td>
-      <td>${escapeHtml(item.message || '-')}</td>
-      <td>${formatDate(item.createdAt)}</td>
-      <td><button class="danger-button delete-request" type="button" data-reference-id="${escapeAttr(item.referenceId)}">Delete</button></td>
-    </tr>
-  `).join('');
-}
-
-function renderClients() {
-  orderClientSelect.innerHTML = '<option value="">Select client</option>' + state.clients.map((client) => (
-    `<option value="${escapeAttr(client.clientId)}">${escapeHtml(client.name)} - ${escapeHtml(client.phone || client.email || client.clientId)}</option>`
-  )).join('');
-
-  if (!state.clients.length) {
-    clientCards.innerHTML = '<p class="empty-card">No clients stored yet. Add your first client with KYC details.</p>';
-    return;
-  }
-
-  clientCards.innerHTML = state.clients.map((client) => {
-    const methods = (client.paymentMethods || []).map((item) => `<span>${escapeHtml(item)}</span>`).join('');
-    const kyc = (client.kycFiles || []).map((file) => `
-      <a class="kyc-link" href="${escapeAttr(file.dataUrl)}" target="_blank" rel="noopener" download="${escapeAttr(file.name || 'kyc-file')}">
-        ${file.type?.startsWith('image/') ? `<img src="${escapeAttr(file.dataUrl)}" alt="" />` : '<span class="file-icon">PDF</span>'}
-        <strong>${escapeHtml(file.name || 'KYC file')}</strong>
-      </a>
-    `).join('');
-    return `
-      <article class="client-card">
-        <div class="card-top">
-          <div>
-            <span class="reference">${escapeHtml(client.clientId)}</span>
-            <h3>${escapeHtml(client.name)}</h3>
-          </div>
-          <button class="danger-button delete-client" type="button" data-client-id="${escapeAttr(client.clientId)}">Delete</button>
-        </div>
-        <dl>
-          <div><dt>Phone</dt><dd>${escapeHtml(client.phone || '-')}</dd></div>
-          <div><dt>Email</dt><dd>${escapeHtml(client.email || '-')}</dd></div>
-          <div><dt>PAN</dt><dd>${escapeHtml(client.pan || '-')}</dd></div>
-          <div><dt>Aadhaar / ID</dt><dd>${escapeHtml(client.aadhaar || '-')}</dd></div>
-          <div><dt>UPI</dt><dd>${escapeHtml(client.upiId || '-')}</dd></div>
-          <div><dt>Bank</dt><dd>${escapeHtml(client.bankName || '-')}</dd></div>
-        </dl>
-        <p>${escapeHtml(client.address || client.notes || 'No extra notes.')}</p>
-        <div class="method-tags">${methods || '<span>No method selected</span>'}</div>
-        <div class="kyc-list">${kyc || '<small>No KYC file uploaded.</small>'}</div>
-      </article>
-    `;
-  }).join('');
+  productList.innerHTML = products.map((product) => `
+    <article class="admin-item">
+      <img src="${product.image}" alt="${product.name}" />
+      <div>
+        <h3>${product.name}</h3>
+        <p>${product.category} · ${product.fabric} · ${product.color}</p>
+        <span>${rupees.format(product.price)} · Stock ${product.stock ?? 0} · ${(product.images?.length || (product.image ? 1 : 0))} photo(s)</span>
+      </div>
+      <div class="admin-actions">
+        <button type="button" data-edit-product="${product.id}">Edit</button>
+        <button type="button" data-delete-product="${product.id}">Delete</button>
+      </div>
+    </article>
+  `).join("");
 }
 
 function renderOrders() {
-  if (!state.orders.length) {
-    orderRows.innerHTML = '<tr><td colspan="12" class="empty">No USDT orders yet.</td></tr>';
+  if (!orders.length) {
+    orderList.innerHTML = '<p class="empty-state">No orders yet. Place a test order from the website checkout.</p>';
     return;
   }
 
-  orderRows.innerHTML = state.orders.map((order) => `
-    <tr>
-      <td><span class="reference">${escapeHtml(order.orderId)}</span><small>${escapeHtml(order.status || 'completed')}</small></td>
-      <td><strong>${escapeHtml(order.clientName)}</strong><small>${escapeHtml(order.clientId)}</small></td>
-      <td><span class="side-pill ${order.orderSide === 'client_sell_usdt' ? 'sell' : 'buy'}">${escapeHtml(orderSideLabel(order.orderSide))}</span></td>
-      <td>${formatAmount(order.inrAmount)}</td>
-      <td>${formatAmount(order.buyPrice)}</td>
-      <td>${formatAmount(order.sellPrice)}</td>
-      <td>${formatNumber(order.sellerUsdtReceived, 4)} USDT</td>
-      <td>${formatNumber(order.clientUsdtDelivered ?? order.quantity, 4)} USDT</td>
-      <td><strong class="${orderProfitUsdt(order) >= 0 ? 'profit-positive' : 'profit-negative'}">${formatNumber(orderProfitUsdt(order), 4)} USDT</strong><small>${formatAmount(order.estimatedProfitInr)}</small></td>
-      <td>${escapeHtml(order.sellerAccountPaidTo || '-')}<small>${escapeHtml(order.sellerPaymentMethod || order.paymentMethod || '-')} / ${escapeHtml(order.sellerBankTransactionId || order.bankTransactionId || 'No tx ID')}</small></td>
-      <td>${formatOrderDateTime(order)}</td>
-      <td class="row-actions"><button class="edit-button edit-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Edit</button><button class="danger-button delete-order" type="button" data-order-id="${escapeAttr(order.orderId)}">Delete</button></td>
-    </tr>
-  `).join('');
+  orderList.innerHTML = orders.map((order) => {
+    const customer = order.customer || {};
+    return `
+      <article class="admin-item">
+        <img src="${order.items?.[0]?.image || "vastravathi-logo.svg"}" alt="" />
+        <div>
+          <h3>${order.id}</h3>
+          <p>${customer.name || "Customer"} · ${customer.phone || "No phone"} · ${customer.city || "No city"} ${customer.pin || ""}</p>
+          <span>${rupees.format(order.total || order.subtotal || 0)} · ${order.payment?.collector || "Shiprocket"} · ${order.payment?.status || "COD Pending"} · ${order.shipmentStatus || "Ready for Shiprocket"}</span>
+        </div>
+        <div class="admin-actions">
+          <select class="status-select" data-status="${order.id}">
+            ${["Pending", "Packed", "Shipped", "Delivered", "Cancelled"].map((status) => `<option value="${status}" ${order.status === status ? "selected" : ""}>${status}</option>`).join("")}
+          </select>
+          <button type="button" data-sync-shiprocket="${order.id}">Shiprocket Sync</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
-function renderProfits() {
-  const profitOrders = state.orders.filter((order) => orderProfitUsdt(order) !== 0);
-  if (!profitOrders.length) {
-    profitRows.innerHTML = '<p class="empty-card">No USDT profit records yet.</p>';
+function renderOrders() {
+  if (!orders.length) {
+    orderList.innerHTML = '<p class="empty-state">No orders yet. Place a test order from the website checkout.</p>';
     return;
   }
 
-  profitRows.innerHTML = profitOrders.map((order) => `
-    <article class="profit-card">
-      <div>
-        <span class="reference">${escapeHtml(order.orderId)}</span>
-        <h3>${escapeHtml(order.clientName || 'Client')}</h3>
-        <p>${formatAmount(order.inrAmount)} paid to seller account: <strong>${escapeHtml(order.sellerAccountPaidTo || '-')}</strong></p>
-      </div>
-      <div class="profit-math">
-        <span>Seller gave <strong>${formatNumber(order.sellerUsdtReceived, 4)} USDT</strong></span>
-        <span>Client received <strong>${formatNumber(order.clientUsdtDelivered ?? order.quantity, 4)} USDT</strong></span>
-        <b>Profit ${formatNumber(orderProfitUsdt(order), 4)} USDT</b>
-      </div>
-    </article>
-  `).join('');
+  orderList.innerHTML = orders.map((order) => {
+    const customer = order.customer || {};
+    const items = Array.isArray(order.items) ? order.items : [];
+    const firstItem = items[0] || {};
+    const paymentMode = order.payment?.mode === "prepaid" ? "Prepaid" : "COD";
+    const address = [customer.address, customer.landmark, customer.city, customer.state, customer.pin]
+      .filter(Boolean)
+      .join(", ");
+
+    return `
+      <article class="admin-item order-item">
+        <img src="${firstItem.image || "vastravathi-logo.svg"}" alt="" />
+        <div class="order-copy">
+          <div class="order-title-row">
+            <h3>${order.id}</h3>
+            <span class="payment-pill">${paymentMode}</span>
+          </div>
+          <p><strong>${customer.name || "Customer"}</strong> · ${customer.phone || "No phone"} · ${customer.email || "No email"}</p>
+          <p>${address || "No address added"}</p>
+          <p>${items.map((item) => `${item.name} x ${item.qty || 1}`).join(", ")}</p>
+          <span>${rupees.format(order.total || order.subtotal || 0)} · ${order.payment?.collector || "Shiprocket"} · ${order.payment?.status || "COD Pending"} · ${order.shipmentStatus || "Ready for Shiprocket"}</span>
+        </div>
+        <div class="admin-actions">
+          <select class="status-select" data-status="${order.id}">
+            ${["Pending", "Packed", "Shipped", "Delivered", "Cancelled"].map((status) => `<option value="${status}" ${order.status === status ? "selected" : ""}>${status}</option>`).join("")}
+          </select>
+          <button type="button" data-copy-order="${order.id}">Copy Details</button>
+          <button type="button" data-sync-shiprocket="${order.id}">Shiprocket Sync</button>
+          <button class="danger-action" type="button" data-delete-order="${order.id}">Delete Order</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
-function reportRows(items) {
-  if (!items || !items.length) {
-    return '<p class="empty-card">No report data yet.</p>';
+function orderDetailsText(order) {
+  const customer = order.customer || {};
+  const items = Array.isArray(order.items) ? order.items : [];
+  return [
+    `Order ID: ${order.id}`,
+    `Customer: ${customer.name || ""}`,
+    `Phone: ${customer.phone || ""}`,
+    `Email: ${customer.email || ""}`,
+    `Address: ${[customer.address, customer.landmark, customer.city, customer.state, customer.pin].filter(Boolean).join(", ")}`,
+    `Payment: ${order.payment?.mode || "cod"} - ${order.payment?.status || ""}`,
+    `Total: ${rupees.format(order.total || order.subtotal || 0)}`,
+    "Products:",
+    ...items.map((item) => `- ${item.name} x ${item.qty || 1} - ${rupees.format(item.price || 0)}`)
+  ].join("\n");
+}
+
+function fillProductForm(product) {
+  Object.entries(product).forEach(([key, value]) => {
+    const input = productForm.elements[key];
+    if (input) input.value = Array.isArray(value) ? value.join("\n") : value ?? "";
+  });
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function clearProductForm() {
+  productForm.reset();
+  productForm.elements.id.value = "";
+  uploadPreview.innerHTML = "";
+}
+
+function renderUploadPreview(urls) {
+  uploadPreview.innerHTML = urls.map((url) => `<img src="${url}" alt="Uploaded saree photo" />`).join("");
+}
+
+photoUpload.addEventListener("change", async (event) => {
+  const files = Array.from(event.target.files || []).slice(0, 8);
+  if (!files.length) return;
+  try {
+    showToast(`Uploading ${files.length} photo(s)...`);
+    const uploaded = [];
+    for (const file of files) {
+      uploaded.push(await uploadPhoto(file));
+    }
+    const urls = uploaded.map((item) => item.url);
+    productForm.elements.image.value = urls[0];
+    productForm.elements.images.value = urls.join("\n");
+    renderUploadPreview(urls);
+    showToast(`${urls.length} photo(s) uploaded`);
+  } catch (error) {
+    showToast(error.message);
   }
-  return items.map((item) => `
-    <div class="report-row">
-      <strong>${escapeHtml(item.period)}</strong>
-      <span>Orders ${formatNumber(item.orders, 0)}</span>
-      <span>Client buys ${formatNumber(item.buyOrders, 0)}</span>
-      <span>Client sells ${formatNumber(item.sellOrders, 0)}</span>
-      <span>USDT out ${formatNumber(item.usdtBoughtByClients, 4)}</span>
-      <span>USDT bought from seller ${formatNumber(item.usdtPurchasedFromSellers, 4)}</span>
-      <span>USDT in ${formatNumber(item.usdtSoldByClients, 4)}</span>
-      <span>Value ${formatAmount(item.revenue)}</span>
-      <b>Profit ${formatNumber(item.usdtProfit ?? item.profit, 4)} USDT</b>
-    </div>
-  `).join('');
-}
-
-function renderReports() {
-  monthlyReport.innerHTML = reportRows(state.reports.monthly);
-  yearlyReport.innerHTML = reportRows(state.reports.yearly);
-}
-
-function renderStorage() {
-  if (!storageStatus) return;
-  if (!state.storage) {
-    storageStatus.innerHTML = '<p>Storage check not loaded yet.</p>';
-    return;
-  }
-  const statusClass = state.storage.ok ? 'safe' : 'danger';
-  const files = state.storage.files || {};
-  const counts = state.storage.counts || {};
-  const writeTest = state.storage.writeTest || {};
-  storageStatus.innerHTML = `
-    <div class="storage-banner ${statusClass}">
-      <strong>${escapeHtml(state.storage.mode || 'unknown')}</strong>
-      <span>${escapeHtml(state.storage.message || '')}</span>
-      <small>DATA_DIR detected: ${state.storage.configured ? 'Yes' : 'No'}${state.storage.configuredDataDir ? ` (${escapeHtml(state.storage.configuredDataDir)})` : ''}</small>
-    </div>
-    <div class="storage-grid">
-      <article><span>Clients</span><strong>${counts.clients || 0}</strong><small>${files.clients?.bytes || 0} bytes</small></article>
-      <article><span>USDT orders</span><strong>${counts.usdtOrders || 0}</strong><small>${files.usdtOrders?.bytes || 0} bytes</small></article>
-      <article><span>Purchase requests</span><strong>${counts.purchaseRequests || 0}</strong><small>${files.purchaseRequests?.bytes || 0} bytes</small></article>
-      <article><span>Journal users</span><strong>${counts.users || 0}</strong><small>${files.users?.bytes || 0} bytes</small></article>
-      <article><span>Journal entries</span><strong>${counts.journalEntries || 0}</strong><small>${files.journalEntries?.bytes || 0} bytes</small></article>
-      <article><span>Write test</span><strong>${writeTest.writes || 0}</strong><small>${escapeHtml(writeTest.testId || 'Not tested yet')}</small></article>
-    </div>
-    <p class="storage-note">Click Write storage test, redeploy once, then refresh. If the same test count stays, Railway storage is working.</p>
-  `;
-}
-
-function renderAll() {
-  renderSummary();
-  renderRequests();
-  renderClients();
-  renderOrders();
-  renderProfits();
-  renderReports();
-  renderStorage();
-}
-
-async function loadOrders(search = '') {
-  const query = search ? `?search=${encodeURIComponent(search)}` : '';
-  const data = await apiFetch(`/api/admin/usdt-orders${query}`);
-  state.orders = data.orders || [];
-  renderSummary();
-  renderOrders();
-  renderProfits();
-}
+});
 
 async function loadAll() {
-  showAdmin();
-  refreshButton.disabled = true;
-  setStatus('Loading secure admin database...');
-  try {
-    const [requestsData, clientsData, ordersData, reportsData, storageData] = await Promise.all([
-      apiFetch('/api/purchase-requests'),
-      apiFetch('/api/admin/clients'),
-      apiFetch('/api/admin/usdt-orders'),
-      apiFetch('/api/admin/reports'),
-      apiFetch('/api/admin/storage')
-    ]);
-    state.requests = requestsData.requests || [];
-    state.clients = clientsData.clients || [];
-    state.orders = ordersData.orders || [];
-    state.reports = reportsData.reports || reportsData || { monthly: [], yearly: [] };
-    state.storage = storageData;
-    renderAll();
-    setStatus(`Loaded ${state.clients.length} clients, ${state.orders.length} USDT orders, and ${state.requests.length} purchase requests.`);
-  } catch (error) {
-    if (error.message !== 'Admin access required.') {
-      setStatus(error.message || 'Could not load admin data.');
-    }
-  } finally {
-    refreshButton.disabled = false;
-  }
+  [products, orders] = await Promise.all([
+    loadProducts(),
+    loadOrders()
+  ]);
+  renderProducts();
+  renderOrders();
+  updateStats();
 }
 
-function activateTab(tabName) {
-  tabButtons.forEach((button) => button.classList.toggle('active', button.dataset.tab === tabName));
-  Object.entries(sections).forEach(([name, section]) => section.classList.toggle('active', name === tabName));
-}
-
-function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve({
-      name: file.name,
-      type: file.type,
-      size: file.size,
-      dataUrl: reader.result
-    });
-    reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
-    reader.readAsDataURL(file);
-  });
-}
-
-async function handleClientSubmit(event) {
+productForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const button = clientForm.querySelector('button[type="submit"]');
-  button.disabled = true;
-  setStatus('Saving client and KYC files...');
-  try {
-    const formData = new FormData(clientForm);
-    const kycFiles = await Promise.all(Array.from(formData.getAll('kycFiles')).filter((file) => file.size).map(fileToDataUrl));
-    const payload = {
-      name: formData.get('name'),
-      phone: formData.get('phone'),
-      email: formData.get('email'),
-      pan: formData.get('pan'),
-      aadhaar: formData.get('aadhaar'),
-      upiId: formData.get('upiId'),
-      bankName: formData.get('bankName'),
-      bankAccount: formData.get('bankAccount'),
-      address: formData.get('address'),
-      notes: formData.get('notes'),
-      paymentMethods: formData.getAll('paymentMethods'),
-      kycFiles
-    };
-    await apiFetch('/api/admin/clients', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    clientForm.reset();
-    await loadAll();
-    activateTab('clients');
-    setStatus('Client saved successfully.');
-  } catch (error) {
-    setStatus(error.message || 'Could not save client.');
-  } finally {
-    button.disabled = false;
-  }
-}
+  const data = Object.fromEntries(new FormData(productForm).entries());
+  delete data.photoUpload;
+  data.images = String(data.images || "")
+    .split("\n")
+    .map((image) => image.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+  if (!data.image && data.images.length) data.image = data.images[0];
+  data.price = Number(data.price);
+  data.compare = Number(data.compare || 0);
+  data.stock = Number(data.stock || 0);
 
-async function handleOrderSubmit(event) {
-  event.preventDefault();
-  const button = orderForm.querySelector('button[type="submit"]');
-  button.disabled = true;
-  const orderId = editOrderId.value.trim();
-  setStatus(orderId ? 'Updating USDT order...' : 'Generating USDT order...');
-  try {
-    const formData = new FormData(orderForm);
-    const payload = Object.fromEntries(formData.entries());
-    if (!payload.orderId) delete payload.orderId;
-    await apiFetch(orderId ? `/api/admin/usdt-orders/${encodeURIComponent(orderId)}` : '/api/admin/usdt-orders', {
-      method: orderId ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    resetOrderForm();
-    await loadAll();
-    activateTab('orders');
-    setStatus(orderId ? 'USDT order updated and reports refreshed.' : 'USDT order generated and report updated.');
-  } catch (error) {
-    setStatus(error.message || (orderId ? 'Could not update order.' : 'Could not generate order.'));
-  } finally {
-    button.disabled = false;
-  }
-}
-
-function resetOrderForm() {
-  orderForm.reset();
-  editOrderId.value = '';
-  orderSubmitButton.textContent = 'Generate order';
-  cancelEditOrder.hidden = true;
-}
-
-function fillOrderForm(order) {
-  editOrderId.value = order.orderId || '';
-  orderForm.elements.clientId.value = order.clientId || '';
-  orderForm.elements.orderSide.value = order.orderSide || 'client_buy_usdt';
-  orderForm.elements.orderDate.value = order.orderDate || '';
-  orderForm.elements.orderTime.value = order.orderTime || '';
-  orderForm.elements.inrAmount.value = order.inrAmount ?? '';
-  orderForm.elements.buyPrice.value = order.buyPrice ?? '';
-  orderForm.elements.sellPrice.value = order.sellPrice ?? '';
-  orderForm.elements.quantity.value = order.orderSide === 'client_sell_usdt' ? (order.quantity ?? '') : '';
-  orderForm.elements.sellerAccountPaidTo.value = order.sellerAccountPaidTo || '';
-  orderForm.elements.sellerPaymentMethod.value = order.sellerPaymentMethod || 'UPI';
-  orderForm.elements.sellerBankTransactionId.value = order.sellerBankTransactionId || '';
-  orderForm.elements.paymentMethod.value = order.paymentMethod || 'UPI';
-  orderForm.elements.bankTransactionId.value = order.bankTransactionId || '';
-  orderForm.elements.status.value = order.status || 'completed';
-  orderForm.elements.notes.value = order.notes || '';
-  orderSubmitButton.textContent = 'Update order';
-  cancelEditOrder.hidden = false;
-  orderForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
-}
-
-adminLoginForm.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const keyword = adminKeyword.value.trim();
-  if (!keyword) {
-    loginStatus.textContent = 'Enter the admin keyword.';
-    return;
-  }
-  adminKey = keyword;
-  sessionStorage.setItem(storageKey, adminKey);
-  loadAll();
+  await saveProduct(data);
+  clearProductForm();
+  await loadAll();
+  showToast("Product saved");
 });
 
-refreshButton.addEventListener('click', loadAll);
-logoutButton.addEventListener('click', () => showLogin('Admin portal locked.'));
-tabButtons.forEach((button) => button.addEventListener('click', () => activateTab(button.dataset.tab)));
-clientForm.addEventListener('submit', handleClientSubmit);
-orderForm.addEventListener('submit', handleOrderSubmit);
-cancelEditOrder.addEventListener('click', resetOrderForm);
+document.addEventListener("click", async (event) => {
+  const editId = event.target.closest("[data-edit-product]")?.dataset.editProduct;
+  const deleteId = event.target.closest("[data-delete-product]")?.dataset.deleteProduct;
+  const syncId = event.target.closest("[data-sync-shiprocket]")?.dataset.syncShiprocket;
+  const copyId = event.target.closest("[data-copy-order]")?.dataset.copyOrder;
+  const deleteOrderId = event.target.closest("[data-delete-order]")?.dataset.deleteOrder;
 
-requestRows.addEventListener('click', async (event) => {
-  const button = event.target.closest('.delete-request');
-  if (!button) return;
-  const referenceId = button.dataset.referenceId;
-  if (!window.confirm(`Delete request ${referenceId}?`)) return;
-  button.disabled = true;
-  try {
-    await apiFetch(`/api/purchase-requests/${encodeURIComponent(referenceId)}`, { method: 'DELETE' });
-    await loadAll();
-    setStatus('Purchase request deleted.');
-  } catch (error) {
-    setStatus(error.message || 'Could not delete request.');
-    button.disabled = false;
+  if (editId) {
+    const product = products.find((item) => item.id === editId);
+    if (product) fillProductForm(product);
   }
-});
 
-requestRows.addEventListener('change', async (event) => {
-  const select = event.target.closest('.payment-status');
-  if (!select) return;
-  select.disabled = true;
-  try {
-    await apiFetch(`/api/purchase-requests/${encodeURIComponent(select.dataset.referenceId)}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ paymentStatus: select.value })
-    });
+  if (deleteId) {
+    await deleteProduct(deleteId);
     await loadAll();
-    setStatus('Payment status updated.');
-  } catch (error) {
-    setStatus(error.message || 'Could not update payment status.');
-    select.disabled = false;
+    showToast("Product deleted");
   }
-});
 
-clientCards.addEventListener('click', async (event) => {
-  const button = event.target.closest('.delete-client');
-  if (!button) return;
-  const clientId = button.dataset.clientId;
-  if (!window.confirm(`Delete client ${clientId}?`)) return;
-  button.disabled = true;
-  try {
-    await apiFetch(`/api/admin/clients/${encodeURIComponent(clientId)}`, { method: 'DELETE' });
+  if (syncId) {
+    await api(`/api/shiprocket/sync/${syncId}`, { method: "POST", body: "{}" });
     await loadAll();
-    setStatus('Client deleted.');
-  } catch (error) {
-    setStatus(error.message || 'Could not delete client.');
-    button.disabled = false;
+    showToast("Shiprocket placeholder updated");
   }
-});
 
-orderRows.addEventListener('click', async (event) => {
-  const editButton = event.target.closest('.edit-order');
-  if (editButton) {
-    const order = state.orders.find((item) => item.orderId === editButton.dataset.orderId);
-    if (!order) {
-      setStatus('Order not found. Please refresh and try again.');
-      return;
+  if (copyId) {
+    const order = orders.find((item) => item.id === copyId);
+    if (order) {
+      await navigator.clipboard.writeText(orderDetailsText(order));
+      showToast("Order details copied");
     }
-    fillOrderForm(order);
-    setStatus(`Editing ${order.orderId}. Update the fields and click Update order.`);
-    return;
   }
 
-  const button = event.target.closest('.delete-order');
-  if (!button) return;
-  const orderId = button.dataset.orderId;
-  if (!window.confirm(`Delete order ${orderId}?`)) return;
-  button.disabled = true;
-  try {
-    await apiFetch(`/api/admin/usdt-orders/${encodeURIComponent(orderId)}`, { method: 'DELETE' });
+  if (deleteOrderId) {
+    const order = orders.find((item) => item.id === deleteOrderId);
+    const label = order?.id || "this order";
+    if (!window.confirm(`Delete ${label}? Product stock from this order will be restored.`)) return;
+    await api(`/api/orders/${deleteOrderId}`, { method: "DELETE" });
     await loadAll();
-    setStatus('USDT order deleted.');
-  } catch (error) {
-    setStatus(error.message || 'Could not delete order.');
-    button.disabled = false;
+    showToast("Order deleted");
+  }
+
+  if (event.target.closest("[data-reset-product]")) clearProductForm();
+  if (event.target.closest("[data-logout]")) {
+    await api("/api/admin/logout", { method: "POST", body: "{}" });
+    window.location.href = "/admin-login.html";
+  }
+  if (event.target.closest("[data-refresh-orders]")) {
+    await loadAll();
+    showToast("Orders refreshed");
   }
 });
 
-let searchTimer;
-orderSearch.addEventListener('input', () => {
-  clearTimeout(searchTimer);
-  searchTimer = setTimeout(async () => {
-    try {
-      await loadOrders(orderSearch.value.trim());
-      setStatus(orderSearch.value.trim() ? 'Showing matching USDT orders.' : 'Showing all USDT orders.');
-    } catch (error) {
-      setStatus(error.message || 'Could not search orders.');
-    }
-  }, 300);
-});
-
-if (downloadBackupButton) {
-  downloadBackupButton.addEventListener('click', async () => {
-    downloadBackupButton.disabled = true;
-    setStatus('Preparing admin backup...');
-    try {
-      const response = await fetch('/api/admin/export', {
-        cache: 'no-store',
-        headers: getAdminHeaders()
-      });
-      if (!response.ok) throw new Error('Could not download backup.');
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `tradeonix-admin-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      setStatus('Backup downloaded.');
-    } catch (error) {
-      setStatus(error.message || 'Could not download backup.');
-    } finally {
-      downloadBackupButton.disabled = false;
-    }
+document.addEventListener("change", async (event) => {
+  const id = event.target.dataset.status;
+  if (!id) return;
+  await api(`/api/orders/${id}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: event.target.value })
   });
-}
+  await loadAll();
+  showToast("Order updated");
+});
 
-if (storageTestButton) {
-  storageTestButton.addEventListener('click', async () => {
-    storageTestButton.disabled = true;
-    setStatus('Writing storage test...');
-    try {
-      const data = await apiFetch('/api/admin/storage-test', { method: 'POST' });
-      state.storage = data.storage;
-      renderStorage();
-      setStatus('Storage test written. Redeploy once, then refresh this tab to confirm it stays.');
-    } catch (error) {
-      setStatus(error.message || 'Could not write storage test.');
-    } finally {
-      storageTestButton.disabled = false;
-    }
-  });
-}
-
-if (adminKey) {
-  loadAll();
+if (supabaseEnabled) {
+  loadAll().catch((error) => showToast(error.message));
 } else {
-  showLogin();
+  api("/api/admin/me")
+    .then((session) => {
+      if (!session.loggedIn) window.location.href = "/admin-login.html";
+      return loadAll();
+    })
+    .catch((error) => showToast(error.message));
 }

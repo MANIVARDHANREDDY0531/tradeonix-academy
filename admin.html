@@ -1,144 +1,85 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TRADEONIX Admin - Client Database</title>
-  <link rel="icon" href="tradeonix-logo.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="admin.css?v=6" />
+  <title>Vastravathi Admin</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="admin.css" />
 </head>
-<body>
-  <main class="admin-shell">
-    <section class="admin-login" id="adminLoginPanel">
-      <form id="adminLoginForm">
-        <span class="eyebrow">TRADEONIX SECURE DESK</span>
-        <h1>Admin Access</h1>
-        <p>Enter the admin keyword to unlock private client and USDT transaction records.</p>
-        <label>
-          Admin keyword
-          <input id="adminKeyword" name="keyword" type="password" autocomplete="off" required />
-        </label>
-        <button type="submit">Unlock admin portal</button>
-        <p id="loginStatus" class="login-status"></p>
-      </form>
+<body class="admin-body">
+  <header class="admin-header">
+    <a class="brand" href="index.html" aria-label="Back to Vastravathi">
+      <img class="brand-logo" src="vastravathi-logo.svg" alt="Vastravathi" />
+    </a>
+    <div>
+      <p class="eyebrow">Backend dashboard</p>
+      <h1>Store admin</h1>
+    </div>
+    <div class="admin-header-actions">
+      <a class="secondary-detail-btn" href="index.html">View Website</a>
+      <button class="secondary-detail-btn" type="button" data-logout>Logout</button>
+    </div>
+  </header>
+
+  <main class="admin-main">
+    <section class="admin-stats" aria-label="Store stats">
+      <article><span>Products</span><strong data-product-total>0</strong></article>
+      <article><span>Orders</span><strong data-order-total>0</strong></article>
+      <article><span>Pending</span><strong data-pending-total>0</strong></article>
+      <article><span>Revenue</span><strong data-revenue-total>₹0</strong></article>
     </section>
 
-    <div id="adminContent" hidden>
-      <header class="admin-header">
+    <section class="admin-panel">
+      <div class="admin-panel-heading">
         <div>
-          <span class="eyebrow">TRADEONIX ADMIN</span>
-          <h1>Client & USDT Desk</h1>
-          <p>Manage purchase requests, client KYC files, USDT buy/sell orders, payment references, and reports.</p>
+          <p class="eyebrow">Inventory</p>
+          <h2>Add or update sarees</h2>
         </div>
-        <div class="admin-actions">
-          <a href="black-gold-version.html">Website</a>
-          <button id="refreshButton" type="button">Refresh</button>
-          <button id="logoutButton" type="button">Lock</button>
+        <button class="secondary-detail-btn" type="button" data-reset-product>Clear Form</button>
+      </div>
+      <form class="admin-form" data-product-form>
+        <input type="hidden" name="id" />
+        <label>Name<input name="name" required /></label>
+        <label>Category
+          <select name="category">
+            <option value="silk">Silk</option>
+            <option value="cotton">Cotton</option>
+            <option value="wedding">Wedding</option>
+            <option value="organza">Organza</option>
+          </select>
+        </label>
+        <label>Occasion<input name="occasion" required /></label>
+        <label>Badge<input name="badge" required /></label>
+        <label>Price<input name="price" type="number" required /></label>
+        <label>Compare price<input name="compare" type="number" /></label>
+        <label>Fabric<input name="fabric" required /></label>
+        <label>Color<input name="color" required /></label>
+        <label>Stock<input name="stock" type="number" required /></label>
+        <label class="span-2">Upload saree photos, up to 8<input type="file" name="photoUpload" accept="image/*" data-photo-upload multiple /></label>
+        <label class="span-2">Main Image URL<input name="image" placeholder="Auto-filled after upload or paste a link" required /></label>
+        <label class="span-2">All Image URLs<textarea name="images" placeholder="Auto-filled after upload. One image URL per line."></textarea></label>
+        <div class="upload-preview span-2" data-upload-preview></div>
+        <label class="span-2">Details<textarea name="details" required></textarea></label>
+        <button class="primary-btn span-2" type="submit">Save Product</button>
+      </form>
+      <div class="admin-list" data-product-list></div>
+    </section>
+
+    <section class="admin-panel">
+      <div class="admin-panel-heading">
+        <div>
+          <p class="eyebrow">Orders</p>
+          <h2>Shiprocket-ready orders</h2>
         </div>
-      </header>
-
-      <section class="summary-grid" aria-label="Admin summary">
-        <article><span>Total clients</span><strong id="totalClients">0</strong></article>
-        <article><span>USDT orders</span><strong id="totalOrders">0</strong></article>
-        <article><span>USDT profit</span><strong id="totalProfit">0 USDT</strong></article>
-        <article><span>Purchase requests</span><strong id="totalRequests">0</strong></article>
-      </section>
-
-      <nav class="admin-tabs" aria-label="Admin sections">
-        <button class="active" data-tab="requests" type="button">Purchase Requests</button>
-        <button data-tab="clients" type="button">Clients & KYC</button>
-        <button data-tab="orders" type="button">USDT Orders</button>
-        <button data-tab="profits" type="button">Profit Records</button>
-        <button data-tab="reports" type="button">Reports</button>
-        <button data-tab="storage" type="button">Storage</button>
-      </nav>
-
-      <p class="global-status" id="statusText">Ready.</p>
-
-      <section class="admin-section active" id="requestsSection">
-        <div class="panel-head"><div><h2>Purchase Requests</h2><p>Course purchase requests from the website.</p></div></div>
-        <div class="table-wrap"><table><thead><tr><th>Reference</th><th>User</th><th>Contact</th><th>Plan</th><th>Amount</th><th>Payment</th><th>Message</th><th>Submitted</th><th>Action</th></tr></thead><tbody id="requestRows"><tr><td colspan="9" class="empty">No requests yet.</td></tr></tbody></table></div>
-      </section>
-
-      <section class="admin-section" id="clientsSection">
-        <div class="panel-head"><div><h2>Clients & KYC</h2><p>Store basic client details, payment methods, notes, and KYC files.</p></div></div>
-        <form class="admin-form" id="clientForm">
-          <label>Client name<input name="name" required /></label>
-          <label>Phone<input name="phone" /></label>
-          <label>Email<input name="email" type="email" /></label>
-          <label>PAN<input name="pan" /></label>
-          <label>Aadhaar / ID<input name="aadhaar" /></label>
-          <label>UPI ID<input name="upiId" /></label>
-          <label>Bank name<input name="bankName" /></label>
-          <label>Bank account / notes<input name="bankAccount" /></label>
-          <label class="wide">Address<textarea name="address" rows="2"></textarea></label>
-          <fieldset class="wide method-box">
-            <legend>Indian payment methods</legend>
-            <label><input type="checkbox" name="paymentMethods" value="UPI" /> UPI</label>
-            <label><input type="checkbox" name="paymentMethods" value="Bank Transfer" /> Bank Transfer</label>
-            <label><input type="checkbox" name="paymentMethods" value="IMPS" /> IMPS</label>
-            <label><input type="checkbox" name="paymentMethods" value="NEFT" /> NEFT</label>
-            <label><input type="checkbox" name="paymentMethods" value="Cash Deposit" /> Cash Deposit</label>
-          </fieldset>
-          <label class="wide">KYC image / document<input name="kycFiles" type="file" accept="image/*,.pdf" multiple /></label>
-          <label class="wide">Client notes<textarea name="notes" rows="3"></textarea></label>
-          <button type="submit">Add client</button>
-        </form>
-        <div class="cards-grid" id="clientCards"></div>
-      </section>
-
-      <section class="admin-section" id="ordersSection">
-        <div class="panel-head">
-          <div><h2>USDT Transaction History</h2><p>Track client amount, seller account paid, USDT received, USDT sent, and USDT profit.</p></div>
-          <label class="search-box">Search order ID<input id="orderSearch" placeholder="USDT order ID, client, seller account, bank tx ID..." /></label>
-        </div>
-        <form class="admin-form" id="orderForm">
-          <input type="hidden" name="orderId" id="editOrderId" />
-          <label>Client<select name="clientId" id="orderClientSelect" required><option value="">Select client</option></select></label>
-          <label>Order type<select name="orderSide" required><option value="client_buy_usdt">Client bought USDT from us</option><option value="client_sell_usdt">Client sold USDT to us</option></select></label>
-          <label>Order date<input name="orderDate" type="date" /></label>
-          <label>Transaction time<input name="orderTime" type="time" /></label>
-          <label>Client paid INR amount<input name="inrAmount" type="number" step="0.01" required /></label>
-          <label>Seller USDT price<input name="buyPrice" type="number" step="0.01" required /></label>
-          <label>Client USDT sell price<input name="sellPrice" type="number" step="0.01" required /></label>
-          <label>USDT quantity for sell order<input name="quantity" type="number" step="0.0001" placeholder="Only when client sells USDT" /></label>
-          <label>Seller UPI / bank account paid to<input name="sellerAccountPaidTo" placeholder="Seller UPI, bank account, or account name" /></label>
-          <label>Seller payment method<select name="sellerPaymentMethod"><option>UPI</option><option>Bank Transfer</option><option>IMPS</option><option>NEFT</option><option>Cash Deposit</option><option>Other</option></select></label>
-          <label>Seller bank transaction ID<input name="sellerBankTransactionId" placeholder="UTR / bank reference paid to seller" /></label>
-          <label>Client payment method<select name="paymentMethod"><option>UPI</option><option>Bank Transfer</option><option>IMPS</option><option>NEFT</option><option>Cash Deposit</option><option>Other</option></select></label>
-          <label>Client bank transaction ID<input name="bankTransactionId" placeholder="Client UTR / bank reference" /></label>
-          <label>Status<select name="status"><option>completed</option><option>pending</option><option>cancelled</option></select></label>
-          <label class="wide">Order notes<textarea name="notes" rows="2"></textarea></label>
-          <div class="form-actions wide">
-            <button id="orderSubmitButton" type="submit">Generate order</button>
-            <button id="cancelEditOrder" class="ghost-button" type="button" hidden>Cancel edit</button>
-          </div>
-        </form>
-        <div class="table-wrap"><table><thead><tr><th>Order ID</th><th>Client</th><th>Type</th><th>Client paid</th><th>Seller rate</th><th>Client rate</th><th>USDT from seller</th><th>USDT to client</th><th>USDT profit</th><th>Seller account</th><th>Date & time</th><th>Action</th></tr></thead><tbody id="orderRows"><tr><td colspan="12" class="empty">No USDT orders yet.</td></tr></tbody></table></div>
-      </section>
-
-      <section class="admin-section" id="profitsSection">
-        <div class="panel-head"><div><h2>Profit Records</h2><p>Separate order-wise USDT profit ledger for quick review.</p></div></div>
-        <div class="profit-ledger" id="profitRows"></div>
-      </section>
-
-      <section class="admin-section" id="reportsSection">
-        <div class="panel-head"><div><h2>Reports</h2><p>Monthly and yearly USDT order reports.</p></div></div>
-        <div class="report-grid">
-          <article><h3>Monthly Report</h3><div id="monthlyReport"></div></article>
-          <article><h3>Yearly Report</h3><div id="yearlyReport"></div></article>
-        </div>
-      </section>
-
-      <section class="admin-section" id="storageSection">
-        <div class="panel-head">
-          <div><h2>Storage Safety</h2><p>Check whether records are saving in Railway persistent storage and download backups.</p></div>
-          <button id="downloadBackupButton" type="button">Download backup</button>
-        </div>
-        <div class="storage-status" id="storageStatus">Storage check will appear after refresh.</div>
-      </section>
-    </div>
+        <button class="secondary-detail-btn" type="button" data-refresh-orders>Refresh</button>
+      </div>
+      <div class="admin-list" data-order-list></div>
+    </section>
   </main>
-  <script src="admin.js?v=7"></script>
+
+  <div class="toast" data-toast>Saved</div>
+  <script src="live-config.js"></script>
+  <script src="admin.js"></script>
 </body>
 </html>
